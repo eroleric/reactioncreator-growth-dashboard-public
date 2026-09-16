@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Reaction Creator project dashboard: priorities, delivery, launch readiness and growth.">
+  <meta name="color-scheme" content="light"><meta name="robots" content="noindex,nofollow">
+  <title>Reaction Creator · Growth dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='11' fill='%23132638'/%3E%3Cpath d='M15 10L29 20L15 30Z' fill='%2351d8c1'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css"><script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to dashboard</a>
+  <section id="lock" class="lock-screen" aria-labelledby="lock-title">
+    <form id="unlock-form" class="lock-card">
+      <span class="lock-logo">▸</span>
+      <div class="eyebrow">REACTION CREATOR</div>
+      <h1 id="lock-title">Project dashboard</h1>
+      <p>Enter the 4-digit PIN to view the project.</p>
+      <label for="pin">Access PIN</label>
+      <input id="pin" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="one-time-code" aria-describedby="pin-help" required>
+      <button type="submit">Unlock dashboard</button>
+      <div id="pin-help" class="pin-help" role="status" aria-live="polite">Your PIN is checked on this device.</div>
+    </form>
+  </section>
+  <aside class="sidebar app-shell" hidden>
+    <a class="brand" href="#overview"><span class="brand-icon">▸</span><span>Reaction Creator<small>GROWTH WORKSPACE</small></span></a>
+    <div class="nav-label">PROJECT</div>
+    <nav aria-label="Dashboard sections">
+      <a href="#overview" data-view="overview"><span>◫</span> Overview</a>
+      <a href="#plan" data-view="plan"><span>≡</span> Plan & tasks</a>
+      <a href="#readiness" data-view="readiness"><span>◇</span> Launch readiness</a>
+      <a href="#growth" data-view="growth"><span>↗</span> Growth & budget</a>
+      <a href="#updates" data-view="updates"><span>◷</span> Updates</a>
+      <a href="#library" data-view="library"><span>▤</span> Project library</a>
+    </nav>
+    <div class="sidebar-foot"><span class="live-mark"></span> Project snapshot<p>Pre-launch → launch → growth</p><a href="https://github.com/eroleric/reactioncreator-growth-dashboard-public" target="_blank" rel="noopener">View repository ↗</a></div>
+  </aside>
+  <div class="workspace app-shell" hidden>
+    <header class="topbar"><span>REACTION CREATOR <span class="slash">/</span> <span id="crumb">Overview</span></span><button id="refresh" class="quiet">↻ Refresh snapshot</button></header>
+    <main id="main" tabindex="-1"><div class="loading" role="status">Loading project records…</div></main>
+    <footer id="footer"></footer>
+  </div>
+  <dialog id="detail"><div class="dialog-head"><span id="detail-kicker">PROJECT RECORD</span><button id="close-detail" aria-label="Close details">×</button></div><div id="detail-body"></div></dialog>
+</body>
+</html>
