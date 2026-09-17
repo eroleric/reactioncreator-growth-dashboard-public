@@ -120,6 +120,18 @@ function doc(path) {
       `<p class="subtle">${esc(d.path)}</p><pre class="document">${esc(d.body)}</pre>`,
     );
 }
+function formatTaskNote(note) {
+  return String(note || "No note recorded.")
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .map((line) => {
+      const match = line.match(/^([^:]{2,28}):\s*(.*)$/);
+      return match
+        ? `<div class="task-note-section"><strong>${esc(match[1])}</strong><span>${esc(match[2])}</span></div>`
+        : `<p>${esc(line)}</p>`;
+    })
+    .join("");
+}
 function taskDetail(id, currentNote = "") {
   const t = data.tasks.find((item) => item.id === id);
   if (!t) return;
@@ -134,7 +146,7 @@ function taskDetail(id, currentNote = "") {
   openDetail(
     `${t.id} · ${phase?.title || t.phaseId}`,
     t.title,
-    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${item("Note or evidence", esc(note))}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Dependencies", esc(t.dependencies))}${item("Parallel / next work", esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
+    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Dependencies", esc(t.dependencies))}${item("Parallel / next work", esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
   );
 }
 function overview() {
@@ -219,7 +231,7 @@ function plan() {
             source = w.sourceUrl
               ? `<a href="${esc(w.sourceUrl)}" target="_blank" rel="noopener">Open source ↗</a>`
               : "—";
-          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><div class="task-row-copy"><small>${esc(t.id)} · ${esc(phase?.title || t.phaseId)} · ${category}</small><h3>${esc(t.title)}</h3></div><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><div class="task-row-note"><label><span>Note or evidence</span><input data-task-row-note="${esc(t.id)}" maxlength="1000" value="${esc(note)}" placeholder="Add a short update…"></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">View all details</button></div><div class="task-row-action"><button class="primary-btn" data-save-task-row="${esc(t.id)}">Save</button><small>${note ? "Saved" : "Shared"}</small></div><details class="task-baseline"><summary>Guidance and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
+          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><div class="task-row-copy"><small>${esc(t.id)} · ${esc(phase?.title || t.phaseId)} · ${category}</small><h3>${esc(t.title)}</h3></div><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><div class="task-row-note"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="3" maxlength="1000" placeholder="Add a short update…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">View all details</button></div><div class="task-row-action"><button class="primary-btn" data-save-task-row="${esc(t.id)}">Save</button><small>${note ? "Saved" : "Shared"}</small></div><details class="task-baseline"><summary>Guidance and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
         })
         .join("") ||
       `<div class="panel empty">No matching ${esc(lifecycleTitle(current))} tasks.</div>`;

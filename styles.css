@@ -1393,7 +1393,8 @@ dialog::backdrop {
   letter-spacing: 0.45px;
 }
 .task-row select,
-.task-row input {
+.task-row input,
+.task-row textarea {
   width: 100%;
   height: 39px;
   border: 1px solid #cdd7e0;
@@ -1402,6 +1403,12 @@ dialog::backdrop {
   padding: 8px 10px;
   color: var(--ink);
   font-size: 13px;
+}
+.task-row textarea {
+  height: auto;
+  min-height: 68px;
+  resize: vertical;
+  line-height: 1.35;
 }
 .task-row-note {
   display: grid;
@@ -1456,12 +1463,40 @@ dialog::backdrop {
 .task-detail-item p {
   line-height: 1.5;
 }
+.task-note-expanded {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.task-note-section {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dce9e5;
+}
+.task-note-section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.task-note-section strong {
+  font-size: 12px;
+  color: #315c56;
+}
+.task-note-section span {
+  font-size: 14px;
+  line-height: 1.5;
+}
 @media (max-width: 620px) {
   .task-detail-grid {
     grid-template-columns: 1fr;
   }
   .task-detail-item:first-child {
     grid-column: auto;
+  }
+  .task-note-section {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 .task-row-action {
