@@ -1653,6 +1653,43 @@ dialog::backdrop {
   font-size: 13px;
   line-height: 1.6;
 }
+.admin-steps {
+  margin: 8px 0 0 20px;
+  padding: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.admin-steps li + li {
+  margin-top: 7px;
+}
+.blocked-reason {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-left: 3px solid #b5473c;
+  background: #fff4f2;
+  border-radius: 4px;
+}
+.blocked-reason small,
+.task-admin-instructions > small {
+  display: block;
+  margin-bottom: 5px;
+  color: #8c3028;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.65px;
+}
+.blocked-reason p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.task-admin-instructions {
+  margin-top: 12px;
+  padding: 11px 13px;
+  background: #fff9e8;
+  border-radius: 6px;
+}
 .action-facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

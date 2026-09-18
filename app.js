@@ -132,6 +132,28 @@ function formatTaskNote(note) {
     })
     .join("");
 }
+function blockedReason(note) {
+  const text = String(note || "").trim();
+  const match = text.match(/(?:^|\n)(?:Blocked because|Why blocked|Blocker):\s*(.+)/i);
+  return match?.[1]?.trim() || text || "The blocking reason has not been recorded.";
+}
+function instructionSteps(action) {
+  const steps = String(action || "")
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+(?=[A-Z])/)
+    .map((step) => step.trim())
+    .filter(Boolean);
+  return `<ol class="admin-steps">${steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ol>`;
+}
+function taskAdminSteps(t) {
+  const dependencyStep =
+    t.dependencies === "None"
+      ? "Confirm you have the account, device, approval, or access needed for this task."
+      : `Confirm these dependencies are complete: ${t.dependencies}.`;
+  return instructionSteps(
+    `${dependencyStep} ${t.title}. Record the result or evidence in the task note, then save the updated status.`,
+  );
+}
 function taskDetail(id, currentNote = "") {
   const t = data.tasks.find((item) => item.id === id);
   if (!t) return;
@@ -146,7 +168,7 @@ function taskDetail(id, currentNote = "") {
   openDetail(
     `${t.id} · ${phase?.title || t.phaseId}`,
     t.title,
-    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Dependencies", esc(t.dependencies))}${item("Parallel / next work", esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
+    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${taskStatus(t) === "BLOCKED" ? item("Why blocked", esc(blockedReason(note))) : ""}${taskNeedsAdmin(t) ? item("Admin steps", taskAdminSteps(t)) : ""}${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Dependencies", esc(t.dependencies))}${item("Parallel / next work", esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
   );
 }
 function overview() {
@@ -178,7 +200,7 @@ function overview() {
         .join("") ||
       `<p class="empty">No detailed, dependency-ready task is registered for ${esc(lifecycleTitle(lifecycle))}. Review Admin help needed or add the next lifecycle task to the project plan.</p>`
     }<div class="lane-actions"><button class="text-btn" data-plan-scope="ready">View ready AI tasks ↗</button></div></div></div></section>` +
-    `<section class="panel work-lane admin-lane"><div class="lane-number">02</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">ADMIN HELP NEEDED</div><h2>Work AI cannot complete alone</h2><p>These items come from the open Owner Actions register. Each card states the exact admin action and what it unlocks.</p></div><span class="tag ${owners.some((o) => o.status === "BLOCKED") ? "blocked" : "warn"}">${owners.length} dependencies</span></div><div class="panel-body owner-grid">${owners.map((o) => `<article class="action-card"><div class="meta"><small class="subtle">${esc(o.id)}</small><span class="tag ${o.status === "BLOCKED" ? "blocked" : "warn"}">${o.status === "BLOCKED" ? "Blocked" : "Admin action"}</span></div><div class="action-detail"><small>WHAT YOU NEED TO DO</small><p>${esc(o.action)}</p></div><div class="action-detail"><small>WHY THIS NEEDS ADMIN</small><p>${esc(o.why)}</p></div><div class="action-facts"><span><small>UNLOCKS</small>${esc(o.blocks)}</span><span><small>WHEN</small>${esc(o.trigger)}</span></div></article>`).join("") || '<p class="subtle">No admin dependencies are open. AI work can continue independently.</p>'}<div class="lane-actions"><button class="text-btn" data-plan-scope="admin">View tasks needing admin help ↗</button></div></div></div></section>` +
+    `<section class="panel work-lane admin-lane"><div class="lane-number">02</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">ADMIN HELP NEEDED</div><h2>Work AI cannot complete alone</h2><p>These items come from the open Owner Actions register. Each card gives step-by-step instructions and what they unlock.</p></div><span class="tag ${owners.some((o) => o.status === "BLOCKED") ? "blocked" : "warn"}">${owners.length} dependencies</span></div><div class="panel-body owner-grid">${owners.map((o) => `<article class="action-card"><div class="meta"><small class="subtle">${esc(o.id)}</small><span class="tag ${o.status === "BLOCKED" ? "blocked" : "warn"}">${o.status === "BLOCKED" ? "Blocked" : "Admin action"}</span></div>${o.status === "BLOCKED" ? `<div class="action-detail blocked-reason"><small>WHY BLOCKED</small><p>${esc(o.why)}</p></div>` : ""}<div class="action-detail"><small>STEP-BY-STEP INSTRUCTIONS</small>${instructionSteps(o.action)}</div><div class="action-detail"><small>WHY THIS NEEDS ADMIN</small><p>${esc(o.why)}</p></div><div class="action-facts"><span><small>UNLOCKS</small>${esc(o.blocks)}</span><span><small>WHEN</small>${esc(o.trigger)}</span></div></article>`).join("") || '<p class="subtle">No admin dependencies are open. AI work can continue independently.</p>'}<div class="lane-actions"><button class="text-btn" data-plan-scope="admin">View tasks needing admin help ↗</button></div></div></div></section>` +
     `</div>`;
 }
 function plan() {
@@ -231,7 +253,7 @@ function plan() {
             source = w.sourceUrl
               ? `<a href="${esc(w.sourceUrl)}" target="_blank" rel="noopener">Open source ↗</a>`
               : "—";
-          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><div class="task-row-copy"><small>${esc(t.id)} · ${esc(phase?.title || t.phaseId)} · ${category}</small><h3>${esc(t.title)}</h3></div><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><div class="task-row-note"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="3" maxlength="1000" placeholder="Add a short update…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">View all details</button></div><div class="task-row-action"><button class="primary-btn" data-save-task-row="${esc(t.id)}">Save</button><small>${note ? "Saved" : "Shared"}</small></div><details class="task-baseline"><summary>Guidance and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
+          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><div class="task-row-copy"><small>${esc(t.id)} · ${esc(phase?.title || t.phaseId)} · ${category}</small><h3>${esc(t.title)}</h3>${status === "BLOCKED" ? `<div class="blocked-reason"><small>WHY BLOCKED</small><p>${esc(blockedReason(note))}</p></div>` : ""}${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</div><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><div class="task-row-note"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="3" maxlength="1000" placeholder="${status === "BLOCKED" ? "Blocked because: describe the exact dependency…" : "Add a short update…"}">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">View all details</button></div><div class="task-row-action"><button class="primary-btn" data-save-task-row="${esc(t.id)}">Save</button><small>${note ? "Saved" : "Shared"}</small></div><details class="task-baseline"><summary>Guidance and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
         })
         .join("") ||
       `<div class="panel empty">No matching ${esc(lifecycleTitle(current))} tasks.</div>`;
@@ -507,6 +529,10 @@ async function saveSharedTask(id, status, note) {
   if (status === "COMPLETE" && !note)
     throw new Error(
       "Add completion evidence before marking this task complete.",
+    );
+  if (status === "BLOCKED" && !/(?:^|\n)Blocked because:\s*\S/i.test(note))
+    throw new Error(
+      'Start the note with "Blocked because:" and describe the exact blocker.',
     );
   await patchSharedDashboard({
     [`tasks/${id}`]: { status, note, updatedAt: new Date().toISOString() },
