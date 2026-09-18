@@ -1410,9 +1410,15 @@ dialog::backdrop {
   resize: vertical;
   line-height: 1.35;
 }
-.task-row-note {
+.task-row-fields {
   display: grid;
-  gap: 5px;
+  gap: 10px;
+}
+.task-row-blocker {
+  padding: 9px;
+  border-left: 3px solid #b5473c;
+  background: #fff4f2;
+  border-radius: 5px;
 }
 .task-detail-button {
   justify-self: start;
@@ -1527,7 +1533,7 @@ dialog::backdrop {
   .task-row {
     grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.5fr);
   }
-  .task-row-note {
+  .task-row-fields {
     grid-column: 1/-2;
   }
   .task-row-action {
@@ -1549,7 +1555,7 @@ dialog::backdrop {
   .task-row {
     grid-template-columns: 1fr;
   }
-  .task-row-note,
+  .task-row-fields,
   .task-row-action {
     grid-column: auto;
     grid-row: auto;

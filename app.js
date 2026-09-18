@@ -7,6 +7,7 @@ let data,
     overviewNote: "",
     taskOverrides: {},
     taskNotes: {},
+    taskBlockers: {},
     gateOverrides: {},
     gateNotes: {},
     project: {},
@@ -132,11 +133,27 @@ function formatTaskNote(note) {
     })
     .join("");
 }
-function blockedReason(note) {
-  const text = String(note || "").trim();
-  const match = text.match(/(?:^|\n)(?:Blocked because|Why blocked|Blocker):\s*(.+)/i);
-  return match?.[1]?.trim() || text || "The blocking reason has not been recorded.";
+const blockedReason = (t) =>
+  adminState.taskBlockers?.[t.id] ||
+  t.blockedReason ||
+  "The blocking reason has not been recorded.";
+function unpackTaskText(value) {
+  const text = typeof value === "string" ? value : "";
+  if (!text.startsWith('{"dashboardTaskText":1,'))
+    return { note: text, blockedReason: "" };
+  try {
+    const parsed = JSON.parse(text);
+    return {
+      note: typeof parsed.note === "string" ? parsed.note : "",
+      blockedReason:
+        typeof parsed.blockedReason === "string" ? parsed.blockedReason : "",
+    };
+  } catch {
+    return { note: text, blockedReason: "" };
+  }
 }
+const packTaskText = (note, blocker) =>
+  JSON.stringify({ dashboardTaskText: 1, note, blockedReason: blocker });
 function instructionSteps(action) {
   const steps = String(action || "")
     .replace(/\s+/g, " ")
@@ -154,12 +171,13 @@ function taskAdminSteps(t) {
     `${dependencyStep} ${t.title}. Record the result or evidence in the task note, then save the updated status.`,
   );
 }
-function taskDetail(id, currentNote = "") {
+function taskDetail(id, currentNote = "", currentBlocker = "") {
   const t = data.tasks.find((item) => item.id === id);
   if (!t) return;
   const phase = data.phases.find((item) => item.id === t.phaseId),
     w = t.workbook || {},
     note = currentNote || adminState.taskNotes?.[t.id] || "No note recorded.",
+    blocker = currentBlocker || blockedReason(t),
     source = w.sourceUrl
       ? `<a href="${esc(w.sourceUrl)}" target="_blank" rel="noopener">Open source ↗</a>`
       : esc(t.source || "Not recorded"),
@@ -168,7 +186,7 @@ function taskDetail(id, currentNote = "") {
   openDetail(
     `${t.id} · ${phase?.title || t.phaseId}`,
     t.title,
-    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${taskStatus(t) === "BLOCKED" ? item("Why blocked", esc(blockedReason(note))) : ""}${taskNeedsAdmin(t) ? item("Admin steps", taskAdminSteps(t)) : ""}${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Dependencies", esc(t.dependencies))}${item("Parallel / next work", esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
+    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${taskStatus(t) === "BLOCKED" ? item("Why blocked", esc(blocker)) : ""}${taskNeedsAdmin(t) ? item("Admin steps", taskAdminSteps(t)) : ""}${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Dependencies", esc(t.dependencies))}${item("Parallel / next work", esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
   );
 }
 function overview() {
@@ -247,13 +265,14 @@ function plan() {
           const phase = data.phases.find((p) => p.id === t.phaseId),
             status = taskStatus(t),
             note = adminState.taskNotes?.[t.id] || "",
+            blocker = adminState.taskBlockers?.[t.id] || t.blockedReason || "",
             kind = taskNeedsAdmin(t) ? "admin-help" : "ai-task",
             category = taskNeedsAdmin(t) ? "Admin help needed" : "AI task",
             w = t.workbook || {},
             source = w.sourceUrl
               ? `<a href="${esc(w.sourceUrl)}" target="_blank" rel="noopener">Open source ↗</a>`
               : "—";
-          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><div class="task-row-copy"><small>${esc(t.id)} · ${esc(phase?.title || t.phaseId)} · ${category}</small><h3>${esc(t.title)}</h3>${status === "BLOCKED" ? `<div class="blocked-reason"><small>WHY BLOCKED</small><p>${esc(blockedReason(note))}</p></div>` : ""}${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</div><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><div class="task-row-note"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="3" maxlength="1000" placeholder="${status === "BLOCKED" ? "Blocked because: describe the exact dependency…" : "Add a short update…"}">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">View all details</button></div><div class="task-row-action"><button class="primary-btn" data-save-task-row="${esc(t.id)}">Save</button><small>${note ? "Saved" : "Shared"}</small></div><details class="task-baseline"><summary>Guidance and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
+          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><div class="task-row-copy"><small>${esc(t.id)} · ${esc(phase?.title || t.phaseId)} · ${category}</small><h3>${esc(t.title)}</h3>${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</div><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><div class="task-row-fields"><label class="task-row-blocker"><span>Why blocked</span><textarea data-task-row-blocker="${esc(t.id)}" rows="2" maxlength="1000" placeholder="Describe the exact blocking dependency…">${esc(blocker)}</textarea></label><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="3" maxlength="1000" placeholder="Add a short update or evidence…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">View all details</button></div><div class="task-row-action"><button class="primary-btn" data-save-task-row="${esc(t.id)}">Save</button><small>${note || blocker ? "Saved" : "Shared"}</small></div><details class="task-baseline"><summary>Guidance and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
         })
         .join("") ||
       `<div class="panel empty">No matching ${esc(lifecycleTitle(current))} tasks.</div>`;
@@ -488,8 +507,9 @@ async function loadSharedDashboardState() {
         )
       ) {
         adminState.taskOverrides[id] = item.status;
-        adminState.taskNotes[id] =
-          typeof item.note === "string" ? item.note : "";
+        const taskText = unpackTaskText(item.note);
+        adminState.taskNotes[id] = taskText.note;
+        adminState.taskBlockers[id] = taskText.blockedReason;
       }
     }
     for (const [id, item] of Object.entries(shared?.gates || {})) {
@@ -520,7 +540,7 @@ async function saveSharedLifecycle(value) {
   adminState.project.stage = value;
   await saveAdminState();
 }
-async function saveSharedTask(id, status, note) {
+async function saveSharedTask(id, status, note, blocker) {
   if (
     !data.tasks.some((t) => t.id === id) ||
     !["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].includes(status)
@@ -530,15 +550,21 @@ async function saveSharedTask(id, status, note) {
     throw new Error(
       "Add completion evidence before marking this task complete.",
     );
-  if (status === "BLOCKED" && !/(?:^|\n)Blocked because:\s*\S/i.test(note))
-    throw new Error(
-      'Start the note with "Blocked because:" and describe the exact blocker.',
-    );
+  if (status === "BLOCKED" && !blocker)
+    throw new Error("Add the blocking reason before saving this task.");
+  const packedText = packTaskText(note, blocker);
+  if (packedText.length > 1000)
+    throw new Error("Why blocked and Note or evidence must total 1000 characters or fewer.");
   await patchSharedDashboard({
-    [`tasks/${id}`]: { status, note, updatedAt: new Date().toISOString() },
+    [`tasks/${id}`]: {
+      status,
+      note: packedText,
+      updatedAt: new Date().toISOString(),
+    },
   });
   adminState.taskOverrides[id] = status;
   adminState.taskNotes[id] = note;
+  adminState.taskBlockers[id] = blocker;
   await saveAdminState();
 }
 async function saveSharedGate(id, status, note) {
@@ -604,6 +630,7 @@ async function loadAdminState() {
     overviewNote: base.overviewNote || "",
     taskOverrides: { ...(base.taskOverrides || {}) },
     taskNotes: { ...(base.taskNotes || {}) },
+    taskBlockers: { ...(base.taskBlockers || {}) },
     gateOverrides: { ...(base.gateOverrides || {}) },
     gateNotes: { ...(base.gateNotes || {}) },
     project: { ...(base.project || {}) },
@@ -630,6 +657,8 @@ async function loadAdminState() {
       Object.assign(adminState.taskOverrides, local.taskOverrides);
     if (local.taskNotes && typeof local.taskNotes === "object")
       Object.assign(adminState.taskNotes, local.taskNotes);
+    if (local.taskBlockers && typeof local.taskBlockers === "object")
+      Object.assign(adminState.taskBlockers, local.taskBlockers);
     if (local.gateOverrides && typeof local.gateOverrides === "object")
       Object.assign(adminState.gateOverrides, local.gateOverrides);
     if (local.gateNotes && typeof local.gateNotes === "object")
@@ -765,8 +794,9 @@ document.addEventListener("click", async (e) => {
   if (b.dataset.doc) doc(b.dataset.doc);
   if (b.dataset.taskDetail) {
     const row = b.closest("[data-task-row]"),
-      note = row?.querySelector("[data-task-row-note]")?.value.trim() || "";
-    taskDetail(b.dataset.taskDetail, note);
+      note = row?.querySelector("[data-task-row-note]")?.value.trim() || "",
+      blocker = row?.querySelector("[data-task-row-blocker]")?.value.trim() || "";
+    taskDetail(b.dataset.taskDetail, note, blocker);
   }
   if (b.id === "save-note" || b.id === "clear-note") {
     const status = $("#note-status"),
@@ -788,13 +818,15 @@ document.addEventListener("click", async (e) => {
       row = b.closest("[data-task-row]"),
       statusField = row.querySelector("[data-task-row-status]"),
       noteField = row.querySelector("[data-task-row-note]"),
+      blockerField = row.querySelector("[data-task-row-blocker]"),
       saveStatus = row.querySelector(".task-row-action small"),
       nextStatus = statusField.value,
-      note = noteField.value.trim();
+      note = noteField.value.trim(),
+      blocker = blockerField.value.trim();
     b.disabled = true;
     saveStatus.textContent = "Saving…";
     try {
-      await saveSharedTask(id, nextStatus, note);
+      await saveSharedTask(id, nextStatus, note, blocker);
       saveStatus.textContent = "Saved";
     } catch (error) {
       saveStatus.textContent = error.message;
