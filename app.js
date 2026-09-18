@@ -14,6 +14,17 @@ let data,
     updates: [],
   },
   noteSyncStatus = "Loading shared note…";
+const saveTimers = new Map();
+const debounceSave = (key, work, delay = 700) => {
+  clearTimeout(saveTimers.get(key));
+  saveTimers.set(
+    key,
+    setTimeout(async () => {
+      saveTimers.delete(key);
+      await work();
+    }, delay),
+  );
+};
 const $ = (s) => document.querySelector(s);
 const esc = (v) =>
   String(v ?? "").replace(
@@ -168,7 +179,7 @@ function taskAdminSteps(t) {
       ? "Confirm you have the account, device, approval, or access needed for this task."
       : `Confirm these dependencies are complete: ${t.dependencies}.`;
   return instructionSteps(
-    `${dependencyStep} ${t.title}. Record the result or evidence in the task note, then save the updated status.`,
+    `${dependencyStep} ${t.title}. Record the result or evidence in the task note; changes save automatically.`,
   );
 }
 function taskDetail(id, currentNote = "", currentBlocker = "") {
@@ -207,7 +218,7 @@ function overview() {
       adminState.project?.headline ||
         "From first feedback to lasting subscriber growth.",
     ) +
-    `<div class="overview-top"><section class="panel admin-note"><div class="panel-head"><div><div class="eyebrow">SHARED PROJECT NOTE</div><h2>Overview note</h2></div><span id="note-status" class="save-status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><textarea id="admin-note" rows="5" maxlength="3000" placeholder="Add a note everyone using this dashboard can see…">${esc(adminState.overviewNote)}</textarea><div class="note-actions"><small>Anyone who unlocks this dashboard can edit or clear this shared note.</small><div class="note-buttons"><button id="clear-note" class="text-btn">Clear</button><button id="save-note" class="primary-btn">Save</button></div></div></div></section><section class="panel summary-card" aria-label="Key project numbers"><div class="panel-head"><div><div class="eyebrow">PROJECT SNAPSHOT</div><h2>Key numbers</h2></div><button class="text-btn" data-go="growth">View details ↗</button></div><div class="summary-grid">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback === null ? "—" : feedback} <span>/ 10</span>`, feedback === null ? "Not yet measured" : "3 / 6 / 10 checkpoints")}${stat("Budget remaining", money(data.budget.remaining), `${money(data.budget.spent)} spent`)}${stat("Launch checks passed", `${passed} <span>/ 10</span>`, "Evidence reviewed")}</div></section></div>` +
+    `<div class="overview-top"><section class="panel admin-note"><div class="panel-head"><div><div class="eyebrow">SHARED PROJECT NOTE</div><h2>Overview note</h2></div><span id="note-status" class="save-status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><textarea id="admin-note" rows="5" maxlength="3000" placeholder="Add a note everyone using this dashboard can see…">${esc(adminState.overviewNote)}</textarea><div class="note-actions"><small>Changes save automatically for everyone who unlocks this dashboard.</small><div class="note-buttons"><button id="clear-note" class="text-btn">Clear</button></div></div></div></section><section class="panel summary-card" aria-label="Key project numbers"><div class="panel-head"><div><div class="eyebrow">PROJECT SNAPSHOT</div><h2>Key numbers</h2></div><button class="text-btn" data-go="growth">View details ↗</button></div><div class="summary-grid">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback === null ? "—" : feedback} <span>/ 10</span>`, feedback === null ? "Not yet measured" : "3 / 6 / 10 checkpoints")}${stat("Budget remaining", money(data.budget.remaining), `${money(data.budget.spent)} spent`)}${stat("Launch checks passed", `${passed} <span>/ 10</span>`, "Evidence reviewed")}</div></section></div>` +
     `<div class="work-lanes">` +
     `<section class="panel work-lane ai-lane"><div class="lane-number">01</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">NEXT UNBLOCKED TASK · ${esc(lifecycleTitle(lifecycle).toUpperCase())}</div><h2>Tell Codex to implement this next</h2><p>The next ready task is selected from the current lifecycle. Blocked tasks and tasks with incomplete dependencies are excluded.</p></div><span class="tag pass">${lifecycleTasks.filter(taskReady).length} ready</span></div><div class="task-list">${
       readyTasks
@@ -272,7 +283,7 @@ function plan() {
             source = w.sourceUrl
               ? `<a href="${esc(w.sourceUrl)}" target="_blank" rel="noopener">Open source ↗</a>`
               : "—";
-          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><div class="task-row-copy"><small>${esc(t.id)} · ${esc(phase?.title || t.phaseId)} · ${category}</small><h3>${esc(t.title)}</h3><label class="blocked-reason task-row-blocker" ${status === "BLOCKED" ? "" : "hidden"}><span>WHY BLOCKED</span><textarea data-task-row-blocker="${esc(t.id)}" rows="2" maxlength="1000" placeholder="Describe the exact blocking dependency…">${esc(blocker)}</textarea></label>${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</div><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><div class="task-row-fields"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="3" maxlength="1000" placeholder="Add a short update or evidence…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">View all details</button></div><div class="task-row-action"><button class="primary-btn" data-save-task-row="${esc(t.id)}">Save</button><small>${note || blocker ? "Saved" : "Shared"}</small></div><details class="task-baseline"><summary>Guidance and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
+          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><div class="task-row-copy"><small>${esc(t.id)} · ${esc(phase?.title || t.phaseId)} · ${category}</small><h3>${esc(t.title)}</h3><label class="blocked-reason task-row-blocker" ${status === "BLOCKED" ? "" : "hidden"}><span>WHY BLOCKED</span><textarea data-task-row-blocker="${esc(t.id)}" rows="2" maxlength="1000" placeholder="Describe the exact blocking dependency…">${esc(blocker)}</textarea></label>${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</div><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><div class="task-row-fields"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="3" maxlength="1000" placeholder="Add a short update or evidence…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">View all details</button></div><div class="task-row-action"><small>${note || blocker ? "Saved" : "Auto-save on"}</small></div><details class="task-baseline"><summary>Guidance and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
         })
         .join("") ||
       `<div class="panel empty">No matching ${esc(lifecycleTitle(current))} tasks.</div>`;
@@ -299,7 +310,7 @@ function showGates(group, openId = "") {
     .map((g) => {
       const status = gateStatus(g),
         reviewed = Boolean(adminState.gateOverrides[g.id]);
-      return `<details class="gate" data-gate-id="${esc(g.id)}" ${openId === g.id ? "open" : ""}><summary><div class="gate-copy"><small>${esc(g.id)} · ${esc(g.type)}${reviewed ? " · DASHBOARD REVIEWED" : ""}</small><h3>${esc(g.title)}</h3></div><div class="gate-state">${tag(status)}<span class="gate-chevron" aria-hidden="true">⌄</span></div></summary><div class="gate-details">${detail("Why it matters", g.clarification)}${detail("Related task", g.task)}${detail("Evidence / source", g.source)}${detail("Target", g.target)}${detail("Owner", g.owner)}${detail("Action if not passed", g.action)}${detail("Current source evidence", g.evidence)}<div class="gate-review"><div class="gate-review-head"><div><small>YOUR REVIEW</small><h4>Evidence or decision input</h4></div><span class="save-status" id="gate-save-${esc(g.id)}">Shared across devices</span></div><div class="gate-review-fields"><label>Status<select data-gate-status="${esc(g.id)}">${["WAIT", "PASS", "FAIL"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><label class="gate-note-field">Your evidence or clarification<textarea data-gate-note="${esc(g.id)}" rows="4" maxlength="2000" placeholder="What did you review? Add evidence, decision details, links, reviewer and date.">${esc(adminState.gateNotes?.[g.id] || "")}</textarea></label></div><div class="gate-review-actions"><small>Passed or Needs work requires a note. Save the reviewer, date, evidence or decision details so the result is auditable.</small><button class="primary-btn" data-save-gate="${esc(g.id)}">Save review</button></div></div></div></details>`;
+      return `<details class="gate" data-gate-id="${esc(g.id)}" ${openId === g.id ? "open" : ""}><summary><div class="gate-copy"><small>${esc(g.id)} · ${esc(g.type)}${reviewed ? " · DASHBOARD REVIEWED" : ""}</small><h3>${esc(g.title)}</h3></div><div class="gate-state">${tag(status)}<span class="gate-chevron" aria-hidden="true">⌄</span></div></summary><div class="gate-details">${detail("Why it matters", g.clarification)}${detail("Related task", g.task)}${detail("Evidence / source", g.source)}${detail("Target", g.target)}${detail("Owner", g.owner)}${detail("Action if not passed", g.action)}${detail("Current source evidence", g.evidence)}<div class="gate-review"><div class="gate-review-head"><div><small>YOUR REVIEW</small><h4>Evidence or decision input</h4></div><span class="save-status" id="gate-save-${esc(g.id)}">Auto-save on</span></div><div class="gate-review-fields"><label>Status<select data-gate-status="${esc(g.id)}">${["WAIT", "PASS", "FAIL"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><label class="gate-note-field">Your evidence or clarification<textarea data-gate-note="${esc(g.id)}" rows="4" maxlength="2000" placeholder="What did you review? Add evidence, decision details, links, reviewer and date.">${esc(adminState.gateNotes?.[g.id] || "")}</textarea></label></div><div class="gate-review-actions"><small>Changes save automatically. Passed or Needs work still requires evidence or a decision note.</small></div></div></div></details>`;
     })
     .join("");
 }
@@ -782,6 +793,33 @@ async function load() {
     b.textContent = "↻ Refresh snapshot";
   }
 }
+async function autoSaveTask(row) {
+  const id = row.dataset.taskRow,
+    status = row.querySelector("[data-task-row-status]").value,
+    note = row.querySelector("[data-task-row-note]").value.trim(),
+    blocker = row.querySelector("[data-task-row-blocker]").value.trim(),
+    saveStatus = row.querySelector(".task-row-action small");
+  saveStatus.textContent = "Saving…";
+  try {
+    await saveSharedTask(id, status, note, blocker);
+    saveStatus.textContent = "Saved";
+  } catch (error) {
+    saveStatus.textContent = error.message;
+  }
+}
+async function autoSaveGate(container) {
+  const id = container.dataset.gateId,
+    status = container.querySelector("[data-gate-status]").value,
+    note = container.querySelector("[data-gate-note]").value.trim(),
+    saveStatus = container.querySelector(".save-status");
+  saveStatus.textContent = "Saving…";
+  try {
+    await saveSharedGate(id, status, note);
+    saveStatus.textContent = "Saved";
+  } catch (error) {
+    saveStatus.textContent = error.message;
+  }
+}
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -798,11 +836,13 @@ document.addEventListener("click", async (e) => {
       blocker = row?.querySelector("[data-task-row-blocker]")?.value.trim() || "";
     taskDetail(b.dataset.taskDetail, note, blocker);
   }
-  if (b.id === "save-note" || b.id === "clear-note") {
+  if (b.id === "clear-note") {
     const status = $("#note-status"),
       field = $("#admin-note"),
-      value = b.id === "clear-note" ? "" : field.value.trim();
-    status.textContent = b.id === "clear-note" ? "Clearing…" : "Saving…";
+      value = "";
+    status.textContent = "Clearing…";
+    clearTimeout(saveTimers.get("overview-note"));
+    saveTimers.delete("overview-note");
     try {
       await saveSharedOverviewNote(value);
       field.value = value;
@@ -811,46 +851,6 @@ document.addEventListener("click", async (e) => {
         : "Cleared for everyone";
     } catch (error) {
       status.textContent = error.message;
-    }
-  }
-  if (b.dataset.saveTaskRow) {
-    const id = b.dataset.saveTaskRow,
-      row = b.closest("[data-task-row]"),
-      statusField = row.querySelector("[data-task-row-status]"),
-      noteField = row.querySelector("[data-task-row-note]"),
-      blockerField = row.querySelector("[data-task-row-blocker]"),
-      saveStatus = row.querySelector(".task-row-action small"),
-      nextStatus = statusField.value,
-      note = noteField.value.trim(),
-      blocker = blockerField.value.trim();
-    b.disabled = true;
-    saveStatus.textContent = "Saving…";
-    try {
-      await saveSharedTask(id, nextStatus, note, blocker);
-      saveStatus.textContent = "Saved";
-    } catch (error) {
-      saveStatus.textContent = error.message;
-    } finally {
-      b.disabled = false;
-    }
-  }
-  if (b.dataset.saveGate) {
-    const id = b.dataset.saveGate,
-      gate = data.gates.find((g) => g.id === id),
-      statusField = document.querySelector(`[data-gate-status="${id}"]`),
-      noteField = document.querySelector(`[data-gate-note="${id}"]`),
-      saveStatus = $(`#gate-save-${id}`),
-      nextStatus = statusField.value,
-      note = noteField.value.trim();
-    b.disabled = true;
-    saveStatus.textContent = "Saving…";
-    try {
-      await saveSharedGate(id, nextStatus, note);
-      showGates(gate.group, id);
-    } catch (error) {
-      saveStatus.textContent = error.message;
-    } finally {
-      b.disabled = false;
     }
   }
   if (b.dataset.gateGroup) showGates(b.dataset.gateGroup);
@@ -871,10 +871,42 @@ document.addEventListener("click", async (e) => {
 document.addEventListener("change", (e) => {
   const statusField = e.target.closest("[data-task-row-status]");
   if (!statusField) return;
-  const blocker = statusField
-    .closest("[data-task-row]")
-    ?.querySelector(".task-row-blocker");
+  const row = statusField.closest("[data-task-row]"),
+    blocker = row?.querySelector(".task-row-blocker");
   if (blocker) blocker.hidden = statusField.value !== "BLOCKED";
+  debounceSave(`task:${row.dataset.taskRow}`, () => autoSaveTask(row), 0);
+});
+document.addEventListener("input", (e) => {
+  if (e.target.id === "admin-note") {
+    const status = $("#note-status"),
+      value = e.target.value.trim();
+    status.textContent = "Saving…";
+    debounceSave("overview-note", async () => {
+      try {
+        await saveSharedOverviewNote(value);
+        status.textContent = "Saved for everyone";
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+    return;
+  }
+  const row = e.target.closest("[data-task-row]");
+  if (row && e.target.matches("[data-task-row-note], [data-task-row-blocker]")) {
+    row.querySelector(".task-row-action small").textContent = "Saving…";
+    debounceSave(`task:${row.dataset.taskRow}`, () => autoSaveTask(row));
+    return;
+  }
+  const gate = e.target.closest("[data-gate-id]");
+  if (gate && e.target.matches("[data-gate-note]")) {
+    gate.querySelector(".save-status").textContent = "Saving…";
+    debounceSave(`gate:${gate.dataset.gateId}`, () => autoSaveGate(gate));
+  }
+});
+document.addEventListener("change", (e) => {
+  const gate = e.target.closest("[data-gate-id]");
+  if (gate && e.target.matches("[data-gate-status]"))
+    debounceSave(`gate:${gate.dataset.gateId}`, () => autoSaveGate(gate), 0);
 });
 document.addEventListener("change", async (e) => {
   const field = e.target.closest("[data-lifecycle-switch]");
