@@ -1412,7 +1412,15 @@ dialog::backdrop {
 }
 .task-row-fields {
   display: grid;
+  align-self: stretch;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
+}
+.task-row-fields > label {
+  grid-template-rows: auto minmax(68px, 1fr);
+}
+.task-row-fields > label textarea {
+  height: 100%;
 }
 .task-row-blocker {
   display: grid;
@@ -1565,6 +1573,12 @@ dialog::backdrop {
   .task-row-action {
     grid-column: auto;
     grid-row: auto;
+  }
+  .task-row-fields {
+    grid-template-rows: auto auto;
+  }
+  .task-row-fields > label textarea {
+    height: auto;
   }
   .task-row-action {
     justify-items: stretch;
