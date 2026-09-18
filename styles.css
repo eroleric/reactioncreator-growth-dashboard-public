@@ -1415,10 +1415,16 @@ dialog::backdrop {
   gap: 10px;
 }
 .task-row-blocker {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
   padding: 9px;
   border-left: 3px solid #b5473c;
   background: #fff4f2;
   border-radius: 5px;
+}
+.task-row-blocker[hidden] {
+  display: none;
 }
 .task-detail-button {
   justify-self: start;
