@@ -8,6 +8,7 @@ let data,
     taskOverrides: {},
     taskNotes: {},
     taskBlockers: {},
+    taskWaitingOnAdmin: {},
     gateOverrides: {},
     gateNotes: {},
     project: {},
@@ -90,6 +91,7 @@ const taskIsAI = (t) => t.category === "AI_TASK";
 const taskNeedsAdmin = (t) => t.category === "ADMIN_HELP";
 const taskReady = (t) =>
   taskIsAI(t) &&
+  !adminState.taskWaitingOnAdmin?.[t.id] &&
   ["IN PROGRESS", "NOT STARTED"].includes(taskStatus(t)) &&
   dependencyIds(t).every((id) => {
     const dependency = data.tasks.find((x) => x.id === id);
@@ -104,6 +106,16 @@ const nextLifecycleTasks = (lifecycle) =>
           (taskStatus(b) === "IN PROGRESS" ? -1 : 1) ||
         a.sourceRow - b.sourceRow,
     );
+const nextPlannedTask = (lifecycle) =>
+  data.tasks
+    .filter(
+      (t) =>
+        t.lifecycle === lifecycle &&
+        taskIsAI(t) &&
+        !adminState.taskWaitingOnAdmin?.[t.id] &&
+        ["IN PROGRESS", "NOT STARTED"].includes(taskStatus(t)),
+    )
+    .sort((a, b) => a.sourceRow - b.sourceRow)[0];
 const metric = (name) =>
   data.metrics.find((m) => m.label === name) || {
     value: "UNKNOWN",
@@ -208,7 +220,8 @@ function overview() {
     ).length;
   const lifecycle = activeLifecycle(),
     lifecycleTasks = data.tasks.filter((t) => t.lifecycle === lifecycle),
-    readyTasks = nextLifecycleTasks(lifecycle).slice(0, 1);
+    readyTasks = nextLifecycleTasks(lifecycle).slice(0, 1),
+    plannedTask = nextPlannedTask(lifecycle);
   const owners = data.owners.filter((o) =>
     ["OPEN", "BLOCKED"].includes(o.status),
   );
@@ -227,7 +240,9 @@ function overview() {
           return `<div class="next-item"><span class="step-num">${esc(t.id.replace("WB:", ""))}</span><p><strong>${esc(t.title)}</strong><br><small>${esc(t.phaseId)} · ${esc(phase?.title || "")}</small></p></div>`;
         })
         .join("") ||
-      `<p class="empty">No detailed, dependency-ready task is registered for ${esc(lifecycleTitle(lifecycle))}. Review Admin help needed or add the next lifecycle task to the project plan.</p>`
+      (plannedTask
+        ? `<div class="next-item waiting"><span class="step-num">${esc(plannedTask.id.replace("WB:", ""))}</span><p><strong>${esc(plannedTask.title)}</strong><br><small>Next planned task · waiting for ${esc(plannedTask.dependencies)}</small></p></div><p class="empty">No AI task is currently unblocked. Complete the listed dependency under Admin help needed first.</p>`
+        : `<p class="empty">No detailed, dependency-ready task is registered for ${esc(lifecycleTitle(lifecycle))}. Review Admin help needed or add the next lifecycle task to the project plan.</p>`)
     }<div class="lane-actions"><button class="text-btn" data-plan-scope="ready">View ready AI tasks ↗</button></div></div></div></section>` +
     `<section class="panel work-lane admin-lane"><div class="lane-number">02</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">ADMIN HELP NEEDED</div><h2>Work AI cannot complete alone</h2><p>These items come from the open Owner Actions register. Each card gives step-by-step instructions and what they unlock.</p></div><span class="tag ${owners.some((o) => o.status === "BLOCKED") ? "blocked" : "warn"}">${owners.length} dependencies</span></div><div class="panel-body owner-grid">${owners.map((o) => `<article class="action-card"><div class="meta"><small class="subtle">${esc(o.id)}</small><span class="tag ${o.status === "BLOCKED" ? "blocked" : "warn"}">${o.status === "BLOCKED" ? "Blocked" : "Admin action"}</span></div>${o.status === "BLOCKED" ? `<div class="action-detail blocked-reason"><small>WHY BLOCKED</small><p>${esc(o.why)}</p></div>` : ""}<div class="action-detail"><small>STEP-BY-STEP INSTRUCTIONS</small>${instructionSteps(o.action)}</div><div class="action-detail"><small>WHY THIS NEEDS ADMIN</small><p>${esc(o.why)}</p></div><div class="action-facts"><span><small>UNLOCKS</small>${esc(o.blocks)}</span><span><small>WHEN</small>${esc(o.trigger)}</span></div></article>`).join("") || '<p class="subtle">No admin dependencies are open. AI work can continue independently.</p>'}<div class="lane-actions"><button class="text-btn" data-plan-scope="admin">View tasks needing admin help ↗</button></div></div></div></section>` +
     `</div>`;
@@ -642,6 +657,7 @@ async function loadAdminState() {
     taskOverrides: { ...(base.taskOverrides || {}) },
     taskNotes: { ...(base.taskNotes || {}) },
     taskBlockers: { ...(base.taskBlockers || {}) },
+    taskWaitingOnAdmin: { ...(base.taskWaitingOnAdmin || {}) },
     gateOverrides: { ...(base.gateOverrides || {}) },
     gateNotes: { ...(base.gateNotes || {}) },
     project: { ...(base.project || {}) },
