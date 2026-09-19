@@ -1390,21 +1390,6 @@ dialog::backdrop {
 .task-status-copy {
   min-width: 0;
 }
-.task-status-total {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.task-status-total strong {
-  color: var(--navy);
-  font-size: 26px;
-  line-height: 1;
-}
-.task-status-total span {
-  color: var(--muted);
-  font-size: 13px;
-}
 .task-status-legend {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1429,7 +1414,7 @@ dialog::backdrop {
 .status-dot.blocked { background: var(--red); }
 .task-status-item span {
   display: grid;
-  gap: 3px;
+  gap: 2px;
 }
 .task-status-item strong {
   color: var(--ink);
@@ -1437,13 +1422,7 @@ dialog::backdrop {
 }
 .task-status-item small {
   color: var(--muted);
-  font-size: 12px;
-}
-.task-status-note {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-  margin-top: 14px;
+  font-size: 11px;
 }
 .task-status-phase-path {
   min-width: 0;
