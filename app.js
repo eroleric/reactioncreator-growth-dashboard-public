@@ -285,9 +285,7 @@ function plan() {
       );
     $("#task-count").textContent =
       `${rows.length} of ${grouped.length} ${group === "ready" ? "AI" : group === "admin" ? "admin-help" : "lifecycle"} tasks`;
-    $("#tasks").innerHTML =
-      rows
-        .map((t) => {
+    const taskCard = (t) => {
           const phase = data.phases.find((p) => p.id === t.phaseId),
             status = taskStatus(t),
             note = adminState.taskNotes?.[t.id] || "",
@@ -299,9 +297,17 @@ function plan() {
               ? `<a href="${esc(w.sourceUrl)}" target="_blank" rel="noopener">Open source ↗</a>`
               : "—";
           return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><header class="task-card-header"><div class="task-card-identity"><div class="task-card-kicker"><span>${esc(t.id)}</span><span>${esc(phase?.title || t.phaseId)}</span><span class="task-kind">${category}</span></div><h3>${esc(t.title)}</h3></div><div class="task-card-controls"><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><span class="task-save-status">${note || blocker ? "Saved" : "Auto-save on"}</span></div></header><div class="task-card-body"><section class="task-work"><div class="task-brief"><div><small>SUCCESS LOOKS LIKE</small><p>${esc(t.success)}</p></div><div><small>DEPENDS ON</small><p>${esc(t.dependencies)}</p></div></div><label class="blocked-reason task-row-blocker" ${status === "BLOCKED" ? "" : "hidden"}><span>WHY BLOCKED</span><textarea data-task-row-blocker="${esc(t.id)}" rows="2" maxlength="1000" placeholder="Describe the exact blocking dependency…">${esc(blocker)}</textarea></label>${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</section><section class="task-row-fields"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="5" maxlength="1000" placeholder="Add a short update or evidence…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">Open full task details →</button></section></div><details class="task-baseline"><summary>Guidance, context and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>PARALLEL / NEXT WORK</small><p>${esc([w.parallel && `Parallel: ${w.parallel}`, w.nextTasks && `Next: ${w.nextTasks}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>DEPENDENCIES</small><p>${esc(t.dependencies)}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
-        })
-        .join("") ||
-      `<div class="panel empty">No matching ${esc(lifecycleTitle(current))} tasks.</div>`;
+        },
+      activeRows = rows.filter((t) => taskStatus(t) !== "COMPLETE"),
+      completedRows = rows.filter((t) => taskStatus(t) === "COMPLETE"),
+      activeMarkup = activeRows.map(taskCard).join(""),
+      completedMarkup = completedRows.length
+        ? `<details class="completed-tasks"><summary><span>Completed</span><small>${completedRows.length} ${completedRows.length === 1 ? "task" : "tasks"}</small><span class="completed-chevron" aria-hidden="true">⌄</span></summary><div class="completed-task-list">${completedRows.map(taskCard).join("")}</div></details>`
+        : "";
+    $("#tasks").innerHTML =
+      activeMarkup || completedMarkup
+        ? `${activeMarkup}${completedMarkup}`
+        : `<div class="panel empty">No matching ${esc(lifecycleTitle(current))} tasks.</div>`;
   };
   $("#task-search").addEventListener("input", render);
   $("#task-filter").addEventListener("change", render);
@@ -811,6 +817,7 @@ async function load() {
 }
 async function autoSaveTask(row) {
   const id = row.dataset.taskRow,
+    previousStatus = taskStatus(data.tasks.find((task) => task.id === id)),
     status = row.querySelector("[data-task-row-status]").value,
     note = row.querySelector("[data-task-row-note]").value.trim(),
     blocker = row.querySelector("[data-task-row-blocker]").value.trim(),
@@ -819,6 +826,12 @@ async function autoSaveTask(row) {
   try {
     await saveSharedTask(id, status, note, blocker);
     saveStatus.textContent = "Saved";
+    if (
+      view === "plan" &&
+      (previousStatus === "COMPLETE" || status === "COMPLETE") &&
+      previousStatus !== status
+    )
+      plan();
   } catch (error) {
     saveStatus.textContent = error.message;
   }

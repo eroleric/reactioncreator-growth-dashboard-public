@@ -1340,6 +1340,49 @@ dialog::backdrop {
   display: grid;
   gap: 18px;
 }
+.completed-tasks {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #f5f8f9;
+  overflow: hidden;
+}
+.completed-tasks > summary {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 17px 20px;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+.completed-tasks > summary::-webkit-details-marker {
+  display: none;
+}
+.completed-tasks > summary span:first-child {
+  font-size: 15px;
+  font-weight: 700;
+}
+.completed-tasks > summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.completed-chevron {
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+.completed-tasks[open] .completed-chevron {
+  transform: rotate(180deg);
+}
+.completed-task-list {
+  display: grid;
+  gap: 18px;
+  padding: 0 18px 18px;
+}
+.completed-task-list .task-row {
+  box-shadow: none;
+}
 .task-row {
   background: #fff;
   border: 1px solid var(--line);
