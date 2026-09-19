@@ -1328,17 +1328,17 @@ dialog::backdrop {
 }
 .task-status-layout {
   display: grid;
-  grid-template-columns: minmax(170px, 220px) 1fr;
+  grid-template-columns: minmax(145px, 170px) minmax(220px, .9fr) minmax(300px, 1.35fr);
   align-items: center;
-  gap: 32px;
-  padding: 8px 24px 24px;
+  gap: 24px;
+  padding: 20px 24px 22px;
 }
 .task-donut {
   --status-complete: #007d71;
   --status-progress: #51b8a7;
   --status-waiting: #d7a34b;
   --status-blocked: #b34142;
-  width: min(100%, 210px);
+  width: min(100%, 160px);
   aspect-ratio: 1;
   margin: 0 auto;
   display: grid;
@@ -1394,7 +1394,7 @@ dialog::backdrop {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 17px;
+  margin-bottom: 12px;
 }
 .task-status-total strong {
   color: var(--navy);
@@ -1443,31 +1443,33 @@ dialog::backdrop {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
-  margin-top: 20px;
+  margin-top: 14px;
 }
 .task-status-phase-path {
-  border-top: 1px solid #edf0f3;
-  padding: 20px 24px 24px;
+  min-width: 0;
+  align-self: center;
+  border-left: 1px solid #edf0f3;
+  padding: 0 0 0 22px;
 }
 .task-status-phase-head {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 .task-status-phase-head h3 {
-  font-size: 15px;
-  margin-top: 5px;
+  font-size: 14px;
+  margin-top: 4px;
 }
 .task-status-phase-head small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 .phase-path {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
-  gap: 12px;
-  margin-top: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin-top: 12px;
 }
 .phase-path button {
   min-width: 0;
@@ -1498,7 +1500,7 @@ dialog::backdrop {
   overflow: hidden;
   margin-top: 4px;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -1508,8 +1510,21 @@ dialog::backdrop {
   display: block;
   margin-top: 4px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9.5px;
   line-height: 1.35;
+}
+@media (max-width: 1100px) {
+  .task-status-layout {
+    grid-template-columns: minmax(145px, 170px) minmax(0, 1fr);
+    gap: 20px;
+    padding: 18px 20px 20px;
+  }
+  .task-status-phase-path {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid #edf0f3;
+    padding: 18px 0 0;
+  }
 }
 @media (max-width: 700px) {
   .task-status-layout {
@@ -1521,7 +1536,7 @@ dialog::backdrop {
     width: 180px;
   }
   .task-status-phase-path {
-    padding-inline: 18px;
+    padding: 16px 0 0;
   }
   .task-status-phase-head {
     align-items: flex-start;
