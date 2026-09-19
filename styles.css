@@ -1323,6 +1323,138 @@ dialog::backdrop {
   align-items: end;
   gap: 18px;
 }
+.task-status-panel {
+  margin-top: 22px;
+}
+.task-status-layout {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) 1fr;
+  align-items: center;
+  gap: 32px;
+  padding: 8px 24px 24px;
+}
+.task-donut {
+  --status-complete: #007d71;
+  --status-progress: #51b8a7;
+  --status-waiting: #d7a34b;
+  --status-blocked: #b34142;
+  width: min(100%, 210px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--status-complete) 0 var(--complete),
+    var(--status-progress) var(--complete) calc(var(--complete) + var(--progress)),
+    var(--status-waiting) calc(var(--complete) + var(--progress)) calc(var(--complete) + var(--progress) + var(--waiting)),
+    var(--status-blocked) calc(var(--complete) + var(--progress) + var(--waiting)) 100%
+  );
+  position: relative;
+}
+.task-donut::before {
+  content: "";
+  position: absolute;
+  inset: 15px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #edf0f3;
+}
+.task-donut-center {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.task-donut-center strong {
+  color: var(--navy);
+  font-size: 30px;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.task-donut-center span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.task-donut-center small {
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.task-status-copy {
+  min-width: 0;
+}
+.task-status-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 17px;
+}
+.task-status-total strong {
+  color: var(--navy);
+  font-size: 26px;
+  line-height: 1;
+}
+.task-status-total span {
+  color: var(--muted);
+  font-size: 13px;
+}
+.task-status-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+.task-status-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+}
+.status-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+.status-dot.complete { background: var(--teal); }
+.status-dot.progress { background: #51b8a7; }
+.status-dot.waiting { background: #d7a34b; }
+.status-dot.blocked { background: var(--red); }
+.task-status-item span {
+  display: grid;
+  gap: 3px;
+}
+.task-status-item strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+.task-status-item small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.task-status-note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 20px;
+}
+@media (max-width: 700px) {
+  .task-status-layout {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    padding-inline: 18px;
+  }
+  .task-donut {
+    width: 180px;
+  }
+}
 .task-toolbar > div:first-child p {
   color: var(--muted);
   font-size: 13px;
@@ -1759,6 +1891,49 @@ dialog::backdrop {
   grid-column: 1/-1;
   padding-top: 0;
 }
+.admin-task-carousel {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 12px;
+  padding-top: 20px;
+}
+.admin-task-viewport {
+  min-width: 0;
+}
+.admin-task-viewport .action-card {
+  padding: 20px;
+  border: 1px solid #eee2d5;
+  border-radius: 10px;
+  background: #fffdfa;
+}
+.admin-task-chevron {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0 0 3px;
+  border: 1px solid #e2d6c8;
+  border-radius: 50%;
+  background: #fffdfa;
+  color: var(--amber);
+  font-size: 25px;
+  line-height: 1;
+}
+.admin-task-chevron:hover,
+.admin-task-chevron:focus-visible {
+  background: #fff3e5;
+  border-color: #c89454;
+}
+.admin-task-position {
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.admin-task-empty {
+  padding-top: 20px;
+}
 .action-detail {
   margin-top: 16px;
 }
@@ -1870,6 +2045,15 @@ dialog::backdrop {
   }
   .owner-grid {
     padding: 20px;
+  }
+  .admin-task-carousel {
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    gap: 8px;
+    padding-inline: 20px;
+  }
+  .admin-task-chevron {
+    width: 32px;
+    height: 32px;
   }
   .action-facts {
     grid-template-columns: 1fr;

@@ -3,6 +3,7 @@ let data,
   activePin = "",
   failedAttempts = 0,
   planTaskView = "all",
+  adminActionIndex = 0,
   adminState = {
     overviewNote: "",
     taskOverrides: {},
@@ -71,6 +72,30 @@ const label = (s) =>
 const tag = (s) =>
   `<span class="tag ${statusClass(s)}">${esc(label(s))}</span>`;
 const taskStatus = (t) => adminState.taskOverrides[t.id] || t.status;
+function taskStatusSummary(tasks) {
+  const counts = { complete: 0, inProgress: 0, waiting: 0, blocked: 0 };
+  tasks.forEach((task) => {
+    const status = taskStatus(task);
+    if (status === "COMPLETE") counts.complete += 1;
+    else if (status === "IN PROGRESS") counts.inProgress += 1;
+    else if (status === "BLOCKED") counts.blocked += 1;
+    else counts.waiting += 1;
+  });
+  const total = tasks.length;
+  const percent = (count) => (total ? Math.round((count / total) * 100) : 0);
+  return {
+    total,
+    counts,
+    percentages: {
+      complete: percent(counts.complete),
+      inProgress: percent(counts.inProgress),
+      waiting: percent(counts.waiting),
+      blocked: percent(counts.blocked),
+    },
+    remaining: total - counts.complete,
+    remainingPercent: total ? Math.round(((total - counts.complete) / total) * 100) : 0,
+  };
+}
 const gateStatus = (g) => adminState.gateOverrides[g.id] || g.status;
 const activeLifecycle = () => adminState.project?.stage || "PRE_LAUNCH";
 const lifecycleTitle = (value) =>
@@ -168,6 +193,9 @@ function taskAdminSteps(t) {
     `Confirm you have the account, device, approval, or access needed for this task. ${t.title}. Record the result or evidence in the task note; changes save automatically.`,
   );
 }
+function adminActionCard(o) {
+  return `<article class="action-card"><div class="meta"><small class="subtle">${esc(o.id)}</small><span class="tag ${o.status === "BLOCKED" ? "blocked" : "warn"}">${o.status === "BLOCKED" ? "Blocked" : "Admin action"}</span></div>${o.status === "BLOCKED" ? `<div class="action-detail blocked-reason"><small>WHY BLOCKED</small><p>${esc(o.why)}</p></div>` : ""}<div class="action-detail"><small>STEP-BY-STEP INSTRUCTIONS</small>${instructionSteps(o.action)}</div><div class="action-detail"><small>WHY THIS NEEDS ADMIN</small><p>${esc(o.why)}</p></div><div class="action-facts"><span><small>ENABLES</small>${esc(o.blocks)}</span><span><small>WHEN</small>${esc(o.trigger)}</span></div></article>`;
+}
 function taskDetail(id, currentNote = "", currentBlocker = "") {
   const t = data.tasks.find((item) => item.id === id);
   if (!t) return;
@@ -198,6 +226,13 @@ function overview() {
   const owners = data.owners.filter((o) =>
     ["OPEN", "BLOCKED"].includes(o.status),
   );
+  adminActionIndex = owners.length
+    ? Math.min(adminActionIndex, owners.length - 1)
+    : 0;
+  const adminTask = owners[adminActionIndex],
+    adminTaskView = owners.length
+      ? `<div class="admin-task-carousel"><button class="admin-task-chevron" type="button" data-admin-task-nav="-1" aria-label="Previous admin task" ${owners.length > 1 ? "" : "hidden"}>‹</button><div class="admin-task-viewport">${adminActionCard(adminTask)}</div><button class="admin-task-chevron" type="button" data-admin-task-nav="1" aria-label="Next admin task" ${owners.length > 1 ? "" : "hidden"}>›</button></div><div class="admin-task-position" aria-live="polite">Admin task ${adminActionIndex + 1} of ${owners.length}</div>`
+      : '<p class="subtle admin-task-empty">No admin actions are open.</p>';
   $("#main").innerHTML =
     head(
       "A clear view of what’s next.",
@@ -207,16 +242,18 @@ function overview() {
     `<div class="overview-top"><section class="panel admin-note"><div class="panel-head"><div><div class="eyebrow">SHARED PROJECT NOTE</div><h2>Overview note</h2></div><span id="note-status" class="save-status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><textarea id="admin-note" rows="5" maxlength="3000" placeholder="Add a note everyone using this dashboard can see…">${esc(adminState.overviewNote)}</textarea><div class="note-actions"><small>Changes save automatically for everyone who unlocks this dashboard.</small><div class="note-buttons"><button id="clear-note" class="text-btn">Clear</button></div></div></div></section><section class="panel summary-card" aria-label="Key project numbers"><div class="panel-head"><div><div class="eyebrow">PROJECT SNAPSHOT</div><h2>Key numbers</h2></div><button class="text-btn" data-go="growth">View details ↗</button></div><div class="summary-grid">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback === null ? "—" : feedback} <span>/ 10</span>`, feedback === null ? "Not yet measured" : "3 / 6 / 10 checkpoints")}${stat("Budget remaining", money(data.budget.remaining), `${money(data.budget.spent)} spent`)}${stat("Launch checks passed", `${passed} <span>/ 10</span>`, "Evidence reviewed")}</div></section></div>` +
     `<div class="work-lanes">` +
     `<section class="panel work-lane ai-lane"><div class="lane-number">01</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">NEXT AI TASK · ${esc(lifecycleTitle(lifecycle).toUpperCase())}</div><h2>Tell Codex to implement this next</h2><p>The next active AI task is selected from the current lifecycle.</p></div><span class="tag pass">${lifecycleTasks.filter(taskAvailable).length} available</span></div><div class="task-list">${nextTask ? (() => { const phase = data.phases.find((p) => p.id === nextTask.phaseId); return `<div class="next-item"><span class="step-num">${esc(nextTask.id.replace("WB:", ""))}</span><p><strong>${esc(nextTask.title)}</strong><br><small>${esc(nextTask.phaseId)} · ${esc(phase?.title || "")}</small></p></div>`; })() : `<p class="empty">No active AI task is registered for ${esc(lifecycleTitle(lifecycle))}.</p>`}<div class="lane-actions"><button class="text-btn" data-plan-scope="ready">View AI tasks ↗</button></div></div></div></section>` +
-    `<section class="panel work-lane admin-lane"><div class="lane-number">02</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">ADMIN HELP NEEDED</div><h2>Work AI cannot complete alone</h2><p>These items come from the open Owner Actions register. Each card gives step-by-step instructions and what the action enables.</p></div><span class="tag ${owners.some((o) => o.status === "BLOCKED") ? "blocked" : "warn"}">${owners.length} actions</span></div><div class="panel-body owner-grid">${owners.map((o) => `<article class="action-card"><div class="meta"><small class="subtle">${esc(o.id)}</small><span class="tag ${o.status === "BLOCKED" ? "blocked" : "warn"}">${o.status === "BLOCKED" ? "Blocked" : "Admin action"}</span></div>${o.status === "BLOCKED" ? `<div class="action-detail blocked-reason"><small>WHY BLOCKED</small><p>${esc(o.why)}</p></div>` : ""}<div class="action-detail"><small>STEP-BY-STEP INSTRUCTIONS</small>${instructionSteps(o.action)}</div><div class="action-detail"><small>WHY THIS NEEDS ADMIN</small><p>${esc(o.why)}</p></div><div class="action-facts"><span><small>ENABLES</small>${esc(o.blocks)}</span><span><small>WHEN</small>${esc(o.trigger)}</span></div></article>`).join("") || '<p class="subtle">No admin actions are open.</p>'}<div class="lane-actions"><button class="text-btn" data-plan-scope="admin">View tasks needing admin help ↗</button></div></div></div></section>` +
+    `<section class="panel work-lane admin-lane"><div class="lane-number">02</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">ADMIN HELP NEEDED</div><h2>Work AI cannot complete alone</h2><p>One action is shown at a time. Use the arrows to move through the open Owner Actions.</p></div><span class="tag ${owners.some((o) => o.status === "BLOCKED") ? "blocked" : "warn"}">${owners.length} actions</span></div><div class="panel-body">${adminTaskView}<div class="lane-actions"><button class="text-btn" data-plan-scope="admin">View tasks needing admin help ↗</button></div></div></div></section>` +
     `</div>`;
 }
 function plan() {
   const feedback = data.registeredFeedback,
     current = activeLifecycle(),
     scope = data.tasks.filter((t) => t.lifecycle === current),
+    taskSummary = taskStatusSummary(scope),
     phaseIds = new Set(scope.map((t) => t.phaseId)),
     phases = data.phases.filter((p) => phaseIds.has(p.id)),
     gateGroup = current === "LAUNCH_READY" ? "Launch" : "Social proof";
+  const taskStatusPanel = `<section class="panel task-status-panel" aria-labelledby="task-status-title"><div class="panel-head"><div><div class="eyebrow">TASK STATUS</div><h2 id="task-status-title">How the work is moving</h2></div><small>${esc(lifecycleTitle(current))} scope · ${taskSummary.total} total</small></div><div class="task-status-layout"><div class="task-donut" role="img" aria-label="${taskSummary.percentages.complete}% complete, ${taskSummary.remainingPercent}% left, across ${taskSummary.total} tasks" style="--complete:${taskSummary.percentages.complete}%;--progress:${taskSummary.percentages.inProgress}%;--waiting:${taskSummary.percentages.waiting}%;--blocked:${taskSummary.percentages.blocked}%;"><div class="task-donut-center"><strong>${taskSummary.total ? `${taskSummary.percentages.complete}%` : "—"}</strong><span>complete</span><small>${taskSummary.total ? `${taskSummary.remainingPercent}% left` : "No tasks"}</small></div></div><div class="task-status-copy"><div class="task-status-total"><strong>${taskSummary.total}</strong><span>${taskSummary.total === 1 ? "task" : "tasks"} in this work plan</span></div><div class="task-status-legend"><div class="task-status-item"><i class="status-dot complete"></i><span><strong>Completed</strong><small>${taskSummary.counts.complete} · ${taskSummary.percentages.complete}%</small></span></div><div class="task-status-item"><i class="status-dot progress"></i><span><strong>In progress</strong><small>${taskSummary.counts.inProgress} · ${taskSummary.percentages.inProgress}%</small></span></div><div class="task-status-item"><i class="status-dot waiting"></i><span><strong>Waiting</strong><small>${taskSummary.counts.waiting} · ${taskSummary.percentages.waiting}% · not started</small></span></div><div class="task-status-item"><i class="status-dot blocked"></i><span><strong>Blocked</strong><small>${taskSummary.counts.blocked} · ${taskSummary.percentages.blocked}%</small></span></div></div><p class="task-status-note">The ring updates when task statuses change. “Left” includes work that is in progress, waiting, or blocked.</p></div></div></section>`;
   const feedbackPanel =
     current === "PRE_LAUNCH"
       ? `<section class="panel section-gap"><div class="panel-head"><h2>Feedback journey</h2><small>${feedback === null ? "Unknown" : feedback + " recorded"}</small></div><div class="panel-body"><p class="subtle">Learn, fix and retest between each wave of real creator use.</p><div class="feedback-dots" aria-label="${feedback ?? "Unknown"} of 10 feedback participants">${Array.from({ length: 10 }, (_, i) => `<i class="${feedback !== null && i < feedback ? "done" : ""}"></i>`).join("")}</div><div class="feedback-markers"><span>3 · first learning</span><span>6 · retest</span><span>10 · validate</span></div></div></section>`
@@ -226,6 +263,7 @@ function plan() {
       "Work plan",
       `Only tasks and readiness checks for ${lifecycleTitle(current)} are shown.`,
     ) +
+    taskStatusPanel +
     `<section class="panel"><div class="panel-head"><div><div class="eyebrow">${esc(lifecycleTitle(current).toUpperCase())} PHASES</div><h2>${current === "PRE_LAUNCH" ? "The path to launch readiness" : "Final launch decision"}</h2></div><small>Click a phase for its outcome and evidence</small></div><div class="journey">${phases.map((p) => `<button data-phase="${esc(p.id)}" class="${p.status === "IN PROGRESS" ? "current" : p.status === "BLOCKED" ? "blocked" : ""}" aria-label="Open ${esc(p.title)} details"><div class="track"></div><small>${esc(p.id)}</small><h3>${esc(p.title)}</h3><span class="phase-state">${scope.filter((t) => t.phaseId === p.id).length} tasks · ${esc(label(p.status))}</span></button>`).join("")}</div></section><div class="task-toolbar section-gap"><div><h2>Tasks</h2><p>Green is an AI task. Yellow needs admin help.</p></div><div class="toolbar"><select id="task-scope" aria-label="Choose task group"><option value="all" ${planTaskView === "all" ? "selected" : ""}>All tasks</option><option value="ready" ${planTaskView === "ready" ? "selected" : ""}>AI tasks</option><option value="admin" ${planTaskView === "admin" ? "selected" : ""}>Admin help needed</option></select><input id="task-search" type="search" placeholder="Search tasks…" aria-label="Search tasks"><select id="task-filter" aria-label="Filter tasks by status"><option value="ALL">All statuses</option>${["BLOCKED", "IN PROGRESS", "NOT STARTED", "COMPLETE"].map((s) => `<option value="${s}">${label(s)}</option>`).join("")}</select></div></div><div class="status-count" id="task-count"></div><section class="task-board" id="tasks"></section>${feedbackPanel}<section class="section-gap"><div class="page-head compact-head"><div><div class="eyebrow">${esc(gateGroup.toUpperCase())} READINESS</div><h2>Evidence before the next lifecycle step</h2><p>Open a check to review its meaning, evidence, owner and required action.</p></div></div><div class="callout">${gateGroup === "Launch" ? "Official launch requires every launch check plus the final team decision." : "Creator outreach waits for social proof and recruitment readiness."}</div><div id="gate-count" class="status-count"></div><div id="gates" class="gate-list"></div></section>`;
   const render = () => {
     const q = $("#task-search").value.toLowerCase(),
@@ -814,6 +852,15 @@ async function autoSaveGate(container) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.dataset.adminTaskNav) {
+    const count = data.owners.filter((o) => ["OPEN", "BLOCKED"].includes(o.status)).length;
+    if (count > 1) {
+      adminActionIndex =
+        (adminActionIndex + Number(b.dataset.adminTaskNav) + count) % count;
+      overview();
+    }
+    return;
+  }
   if (b.dataset.go) location.hash = b.dataset.go;
   if (b.dataset.planScope) {
     planTaskView = b.dataset.planScope;
