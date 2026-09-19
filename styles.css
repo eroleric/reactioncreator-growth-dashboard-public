@@ -1445,6 +1445,72 @@ dialog::backdrop {
   line-height: 1.5;
   margin-top: 20px;
 }
+.task-status-phase-path {
+  border-top: 1px solid #edf0f3;
+  padding: 20px 24px 24px;
+}
+.task-status-phase-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.task-status-phase-head h3 {
+  font-size: 15px;
+  margin-top: 5px;
+}
+.task-status-phase-head small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.phase-path {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.phase-path button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.phase-path .track {
+  height: 4px;
+  margin-bottom: 9px;
+  border-radius: 4px;
+  background: #e3e9ef;
+}
+.phase-path .current .track {
+  background: var(--teal);
+}
+.phase-path .blocked .track {
+  background: #dfb16a;
+}
+.phase-path button > small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+.phase-path-title {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.phase-path .phase-state {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
 @media (max-width: 700px) {
   .task-status-layout {
     grid-template-columns: 1fr;
@@ -1453,6 +1519,21 @@ dialog::backdrop {
   }
   .task-donut {
     width: 180px;
+  }
+  .task-status-phase-path {
+    padding-inline: 18px;
+  }
+  .task-status-phase-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .phase-path {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(132px, 1fr);
+    grid-template-columns: none;
+    overflow-x: auto;
+    padding-bottom: 4px;
   }
 }
 .task-toolbar > div:first-child p {
