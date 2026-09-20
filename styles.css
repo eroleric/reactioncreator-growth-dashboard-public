@@ -3254,11 +3254,6 @@ nav a.active {
   padding: 3px 6px;
   font-size: 9px;
 }
-.growth-task-types {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
 .growth-strength {
   margin-bottom: 24px;
   border-top: 4px solid #526da6;
@@ -3418,36 +3413,6 @@ nav a.active {
     padding: 17px 20px 20px;
   }
 }
-.task-type-summary {
-  padding: 20px 22px;
-  border: 1px solid;
-  border-radius: 13px;
-}
-.task-type-summary.recurring {
-  border-color: #bee5d9;
-  background: linear-gradient(115deg, #f0fbf7, #fbfffd);
-}
-.task-type-summary.one-time {
-  border-color: #dcd7f0;
-  background: linear-gradient(115deg, #f7f5fd, #fdfdff);
-}
-.task-type-summary h2 {
-  margin: 10px 0 7px;
-  color: #39405f;
-  font-size: 19px;
-}
-.task-type-summary p {
-  margin: 0;
-  color: #66738a;
-  font-size: 13px;
-  line-height: 1.55;
-}
-.task-type-summary small {
-  display: block;
-  margin-top: 11px;
-  color: #7d8798;
-  font-size: 11px;
-}
 .critical-task-row { border-left: 4px solid #65bfa8; }
 .task-card-kicker .task-type-badge { margin-left: 2px; }
 .growth-simple-task-copy {
@@ -3516,10 +3481,6 @@ nav a.active {
   text-align: left;
   white-space: normal;
 }
-@media (max-width: 900px) {
-  .growth-task-types { grid-template-columns: 1fr; }
-}
-
 /* Pre-launch shares Growth's visual language with its own task scope. */
 .prelaunch-workspace .growth-simple-task { min-width: 0; }
 .prelaunch-workspace .growth-simple-task > span { min-width: 0; overflow-wrap: anywhere; }

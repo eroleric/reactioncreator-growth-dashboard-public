@@ -571,12 +571,7 @@ const taskTypeBadge = (t, compact = false) => {
     : `<span class="task-type-badge one-time${compact ? " compact" : ""}" title="Complete when its individual trigger applies">One Time</span>`;
 };
 const criticalBadge = (t, compact = false) => t.lifecycle === "GROWTH" ? taskTypeBadge(t, compact) : "";
-function taskTypeSummary(tasks) {
-  const recurring = tasks.filter(t => growthTaskType(t) === "RECURRING");
-  const oneTime = tasks.filter(t => growthTaskType(t) === "ONE_TIME");
-  const cadenceCounts = ["DAILY", "WEEKLY", "MONTHLY"].map(cadence => `${recurring.filter(t => growthTaskCadence(t) === cadence).length} ${cadenceLabel(cadence).toLowerCase()}`).join(" · ");
-  return `<section class="growth-task-types"><article class="task-type-summary recurring"><span class="task-type-badge recurring">Recurring</span><h2>${recurring.length} repeating tasks</h2><p>Run these on their daily, weekly or monthly schedule.</p><small>${esc(cadenceCounts)}</small></article><article class="task-type-summary one-time"><span class="task-type-badge one-time">One Time</span><h2>${oneTime.length} event-triggered tasks</h2><p>Use these when the task’s individual condition is met.</p><small>They do not repeat on a fixed schedule.</small></article></section>`;
-}
+const taskTypeSummary = () => "";
 function oneTimeTaskList(tasks) {
   const button = t => `<button class="growth-simple-task ${growthTaskType(t) === "RECURRING" ? "recurring-simple-task" : "one-time-simple-task"}" data-task-detail="${esc(t.id)}" data-growth-searchable="${esc(`${t.id} ${growthTaskTitle(t)} ${growthTaskSummary(t)}`.toLowerCase())}"><span class="growth-simple-task-copy">${taskTypeBadge(t, true)}${esc(growthTaskTitle(t))}</span><small>${esc(label(taskStatus(t)))}</small></button>`;
   const matching = tasks.filter(t => growthTaskType(t) === "ONE_TIME").sort((a, b) => a.sourceRow - b.sourceRow);
