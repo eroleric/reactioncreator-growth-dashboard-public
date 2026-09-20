@@ -5,7 +5,6 @@ let data,
   planTaskView = "all",
   growthTab = "home",
   prelaunchTab = "home",
-  adminActionIndex = 0,
   adminState = {
     overviewNote: "",
     taskOverrides: {},
@@ -136,6 +135,27 @@ const head = (title, sub, extra = "") =>
 function stat(title, value, note) {
   return `<article class="stat"><div class="label">${title}</div><div class="number">${value}</div><div class="note">${note}</div></article>`;
 }
+function overviewWorkspaceCard({
+  className,
+  eyebrow,
+  title,
+  description,
+  status,
+  statusClass,
+  percent,
+  progressLabel,
+  metrics,
+  nextTask,
+  nextLabel,
+  emptyLabel,
+  destination,
+  buttonLabel,
+}) {
+  const next = nextTask
+    ? `<button class="overview-next-task" type="button" data-task-detail="${esc(nextTask.id)}"><span>${esc(nextLabel)}</span><strong>${esc(nextTask.title)}</strong><small>${esc(nextTask.id)} · Open task details →</small></button>`
+    : `<div class="overview-next-task empty"><span>${esc(nextLabel)}</span><strong>${esc(emptyLabel)}</strong></div>`;
+  return `<article class="panel overview-workspace-card ${className}"><div class="overview-workspace-head"><div><div class="eyebrow">${esc(eyebrow)}</div><h2>${esc(title)}</h2><p>${esc(description)}</p></div><span class="tag ${statusClass}">${esc(status)}</span></div><div class="overview-progress"><div><span>${esc(progressLabel)}</span><strong>${percent}%</strong></div><div class="overview-progress-track" role="progressbar" aria-label="${esc(progressLabel)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="--progress:${percent}%"></i></div></div><div class="overview-mini-metrics">${metrics.map((item) => `<div><strong>${esc(item.value)}</strong><span>${esc(item.label)}</span></div>`).join("")}</div>${next}<div class="overview-workspace-footer"><button class="text-btn" type="button" data-go="${destination}">${esc(buttonLabel)} →</button></div></article>`;
+}
 function openDetail(kicker, title, body) {
   $("#detail-kicker").textContent = kicker;
   $("#detail-body").innerHTML = `<h2>${esc(title)}</h2>${body}`;
@@ -199,9 +219,6 @@ function taskAdminSteps(t) {
     `Confirm you have the account, device, approval, or access needed for this task. ${t.title}. Record the result or evidence in the task note; changes save automatically.`,
   );
 }
-function adminActionCard(o) {
-  return `<article class="action-card"><div class="meta"><small class="subtle">${esc(o.id)}</small><span class="tag ${o.status === "BLOCKED" ? "blocked" : "warn"}">${o.status === "BLOCKED" ? "Blocked" : "Admin action"}</span></div>${o.status === "BLOCKED" ? `<div class="action-detail blocked-reason"><small>WHY THIS ACTION NEEDS INPUT</small><p>${esc(o.why)}</p></div>` : ""}<div class="action-detail"><small>STEP-BY-STEP INSTRUCTIONS</small>${instructionSteps(o.action)}</div><div class="action-detail"><small>WHY THIS NEEDS ADMIN</small><p>${esc(o.why)}</p></div><div class="action-facts"><span><small>AFFECTS</small>${esc(o.blocks)}</span><span><small>WHEN</small>${esc(o.trigger)}</span></div></article>`;
-}
 function taskDetail(id, currentNote = "", currentBlocker = "") {
   const t = data.tasks.find((item) => item.id === id);
   if (!t) return;
@@ -223,35 +240,75 @@ function taskDetail(id, currentNote = "", currentBlocker = "") {
   );
 }
 function overview() {
-  const subscribers = metric("Total active subscribers");
-  const feedback = data.registeredFeedback,
+  const subscribers = metric("Total active subscribers"),
+    mrr = metric("MRR"),
+    feedback = data.registeredFeedback,
     passed = data.gates.filter(
       (g) => g.group === "Launch" && gateStatus(g) === "PASS",
     ).length;
   const prelaunchTasks = data.tasks.filter((t) => t.lifecycle === "PRE_LAUNCH"),
-    nextTask = nextLifecycleTask("PRE_LAUNCH");
-  const lifecycleSummary = taskStatusSummary(prelaunchTasks);
-  const owners = data.owners.filter((o) =>
-    ["OPEN", "BLOCKED"].includes(o.status) && !/GR:/.test(o.blocks),
-  );
-  adminActionIndex = owners.length
-    ? Math.min(adminActionIndex, owners.length - 1)
-    : 0;
-  const adminTask = owners[adminActionIndex],
-    adminTaskView = owners.length
-      ? `<div class="admin-task-carousel"><button class="admin-task-chevron" type="button" data-admin-task-nav="-1" aria-label="Previous admin task" ${owners.length > 1 ? "" : "hidden"}>‹</button><div class="admin-task-viewport">${adminActionCard(adminTask)}</div><button class="admin-task-chevron" type="button" data-admin-task-nav="1" aria-label="Next admin task" ${owners.length > 1 ? "" : "hidden"}>›</button></div><div class="admin-task-position" aria-live="polite">Admin task ${adminActionIndex + 1} of ${owners.length}</div>`
-      : '<p class="subtle admin-task-empty">No admin actions are open.</p>';
+    growthTasks = data.tasks.filter((t) => t.lifecycle === "GROWTH"),
+    prelaunchSummary = taskStatusSummary(prelaunchTasks),
+    growthSummary = taskStatusSummary(growthTasks),
+    nextPrelaunch = nextLifecycleTask("PRE_LAUNCH"),
+    nextGrowth = nextLifecycleTask("GROWTH"),
+    growthActive = data.growthLaunchAuthorized === true,
+    prelaunchOwners = data.owners.filter((o) => ["OPEN", "BLOCKED"].includes(o.status) && !/GR:/.test(o.blocks)),
+    growthApprovals = (data.growthSystem?.approvals || []).filter((item) => item.status === "READY"),
+    attentionCount = prelaunchOwners.length + growthApprovals.length;
+  const attentionItems = [
+    ...prelaunchOwners.slice(0, 3).map((item) => `<article><span>PRE LAUNCH · ${esc(item.id)}</span><strong>${esc(item.trigger)}</strong><small>Affects ${esc(item.blocks)}</small></article>`),
+    ...growthApprovals.slice(0, Math.max(0, 3 - prelaunchOwners.length)).map((item) => `<article><span>GROWTH DECISION · ${esc(item.id)}</span><strong>${esc(item.decision)}</strong><small>${esc(item.trigger)}</small></article>`),
+  ].join("");
+  const prelaunchCard = overviewWorkspaceCard({
+    className: "prelaunch",
+    eyebrow: "Pre Launch",
+    title: "Prepare, learn, and get launch-ready.",
+    description: "Product evidence, public presence, creator feedback, fixes, and the final launch review.",
+    status: "Active now",
+    statusClass: "progress",
+    percent: prelaunchSummary.percentages.complete,
+    progressLabel: `${prelaunchSummary.counts.complete} of ${prelaunchSummary.total} tasks complete`,
+    metrics: [
+      { value: String(prelaunchSummary.counts.inProgress), label: "In progress" },
+      { value: `${feedback == null ? "—" : feedback} / 10`, label: "Useful feedback" },
+      { value: `${passed} / 10`, label: "Launch reviews passed" },
+    ],
+    nextTask: nextPrelaunch,
+    nextLabel: "Next useful AI task",
+    emptyLabel: "No unfinished AI task is registered.",
+    destination: "plan",
+    buttonLabel: "Open Pre Launch",
+  });
+  const growthCard = overviewWorkspaceCard({
+    className: "growth",
+    eyebrow: "Growth & budget",
+    title: "Acquire and retain paying subscribers.",
+    description: "Post-launch demand, conversion, activation, retention, referrals, experiments, and budget control.",
+    status: growthActive ? "Active" : "Starts after launch",
+    statusClass: growthActive ? "pass" : "neutral",
+    percent: growthSummary.percentages.complete,
+    progressLabel: `${growthSummary.counts.complete} of ${growthSummary.total} tasks complete`,
+    metrics: [
+      { value: `${display(subscribers.value)} / 5`, label: "Paying subscribers" },
+      { value: display(mrr.value), label: "Monthly revenue" },
+      { value: money(data.budget.remaining), label: "Budget left" },
+    ],
+    nextTask: nextGrowth,
+    nextLabel: growthActive ? "Next Growth task" : "First queued Growth task",
+    emptyLabel: "No unfinished Growth task is registered.",
+    destination: "growth",
+    buttonLabel: "Open Growth & budget",
+  });
   $("#main").innerHTML =
     head(
-      "A clear view of what’s next.",
-      adminState.project?.headline ||
-        "From first feedback to lasting subscriber growth.",
+      "Overview",
+      "Pre-launch readiness and post-launch growth, together in one simple admin view.",
     ) +
-    `<section class="panel summary-card" aria-label="Key project numbers"><div class="panel-head"><div><div class="eyebrow">PROJECT SNAPSHOT</div><h2>Key numbers</h2></div><button class="text-btn" data-go="growth">View Growth & budget ↗</button></div><div class="summary-grid">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback === null ? "—" : feedback} <span>/ 10</span>`, feedback === null ? "Not yet measured" : "3 / 6 / 10 checkpoints")}${stat("Budget remaining", money(data.budget.remaining), `${money(data.budget.spent)} spent`)}${stat("Launch checks passed", `${passed} <span>/ 10</span>`, "Evidence reviewed")}</div></section>` +
-    `<div class="work-lanes">` +
-    `<section class="panel work-lane ai-lane"><div class="lane-number">01</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">NEXT AI TASK · PRE-LAUNCH</div><h2>Tell Codex to implement this next</h2><p>The next active AI task is selected from Pre Launch.</p></div><span class="tag pass">${prelaunchTasks.filter(taskAvailable).length} available</span></div><div class="task-list">${nextTask ? (() => { const phase = data.phases.find((p) => p.id === nextTask.phaseId); return `<div class="next-item"><span class="step-num">${esc(nextTask.id.replace("WB:", ""))}</span><p><strong>${esc(nextTask.title)}</strong><br><small>${esc(nextTask.phaseId)} · ${esc(phase?.title || "")}</small></p></div>`; })() : `<p class="empty">No active AI task is registered for Pre Launch.</p>`}<div class="lane-actions"><button class="text-btn" data-plan-scope="ready">View Pre Launch AI tasks ↗</button></div></div></div></section>` +
-    `<section class="panel work-lane admin-lane"><div class="lane-number">02</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">ADMIN HELP NEEDED</div><h2>Work AI cannot complete alone</h2><p>One action is shown at a time. Use the arrows to move through the open Owner Actions.</p></div><span class="tag ${owners.some((o) => o.status === "BLOCKED") ? "blocked" : "warn"}">${owners.length} actions</span></div><div class="panel-body">${adminTaskView}<div class="lane-actions"><button class="text-btn" data-plan-scope="admin">View tasks needing admin help ↗</button></div></div></div></section>` +
-    `</div>`;
+    `<section class="overview-kpis" aria-label="Project at a glance">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback == null ? "—" : feedback} <span>/ 10</span>`, feedback == null ? "Not measured yet" : "Pre-launch learning")}${stat("Budget left", money(data.budget.remaining), `${money(data.budget.spent)} spent of ${money(data.budget.total)}`)}${stat("Admin attention", attentionCount, attentionCount ? "Open actions and decisions" : "Nothing needs you now")}</section>` +
+    `<section class="overview-section-head"><div><div class="eyebrow">THE TWO WORKSPACES</div><h2>Know where the project stands.</h2></div><p>Open a workspace only when you need its details.</p></section>` +
+    `<section class="overview-workspaces" aria-label="Pre Launch and Growth workspaces">${prelaunchCard}${growthCard}</section>` +
+    `<section class="panel overview-attention ${attentionCount ? "has-actions" : "clear"}"><div class="overview-attention-head"><div><div class="eyebrow">ADMIN ATTENTION</div><h2>${attentionCount ? `${attentionCount} ${attentionCount === 1 ? "item needs" : "items need"} your attention` : "Nothing needs your attention"}</h2><p>${attentionCount ? "These are the current decisions, access steps, or hands-on actions. Detailed instructions stay in the correct workspace." : "There are no open admin actions or Growth decision packets."}</p></div><span class="tag ${attentionCount ? "warn" : "pass"}">${attentionCount ? "Review needed" : "All clear"}</span></div>${attentionCount ? `<div class="overview-attention-list">${attentionItems}</div><div class="overview-attention-footer"><button class="text-btn" type="button" data-plan-scope="admin">Open admin tasks →</button>${growthApprovals.length ? '<button class="text-btn" type="button" data-go="growth">Open Growth decisions →</button>' : ""}</div>` : ""}</section>`;
 }
 function plan(growthLibrary = false) {
   if (!growthLibrary && prelaunchTab !== "records") return prelaunch();
@@ -1133,15 +1190,6 @@ document.addEventListener("click", async (e) => {
     prelaunchTab = b.dataset.prelaunchTab;
     if (prelaunchTab === "records") planTaskView = "all";
     plan();
-    return;
-  }
-  if (b.dataset.adminTaskNav) {
-    const count = data.owners.filter((o) => ["OPEN", "BLOCKED"].includes(o.status)).length;
-    if (count > 1) {
-      adminActionIndex =
-        (adminActionIndex + Number(b.dataset.adminTaskNav) + count) % count;
-      overview();
-    }
     return;
   }
   if (b.dataset.go) location.hash = b.dataset.go;
