@@ -2504,3 +2504,178 @@ dialog::backdrop {
   .growth-tabs button { padding:10px 3px; font-size:12px; }
   .growth-summary-stats .stat { min-height:0; }
 }
+
+/* Palette refresh: visual color only. */
+:root {
+  --navy: #1d2446;
+  --ink: #202740;
+  --muted: #68718a;
+  --line: #dce3f1;
+  --paper: #f7f8fd;
+  --teal: #087d7a;
+  --aqua: #7be4d1;
+  --amber: #a86200;
+  --red: #b53d59;
+}
+.lock-screen {
+  background:
+    radial-gradient(circle at 78% 14%, #5b3c8d 0, transparent 33%),
+    radial-gradient(circle at 18% 88%, #0b817d 0, transparent 38%),
+    linear-gradient(145deg, #1d2446, #302456 62%, #126f72);
+}
+.sidebar {
+  background: linear-gradient(180deg, #1d2446 0%, #292051 58%, #163e58 100%);
+}
+nav a:hover {
+  background: #322a61;
+}
+nav a.active {
+  background: linear-gradient(90deg, #3e2c70, #2c526d);
+  box-shadow: inset 3px 0 #9cebdc;
+}
+.sidebar-foot {
+  border-top-color: #494776;
+}
+.topbar {
+  background: #fffefe;
+  border-bottom-color: #dfe3f4;
+}
+.quiet:hover {
+  background: #edf4ff;
+  border-color: #c8d6ef;
+}
+.tag {
+  background: #e3f6f2;
+  color: #08736f;
+}
+.tag.warn {
+  background: #fff1da;
+  color: #966000;
+}
+.tag.blocked,
+.tag.fail {
+  background: #fdebf0;
+  color: #a93653;
+}
+.tag.neutral {
+  background: #eeeafd;
+  color: #58428a;
+}
+.tag.complete,
+.tag.pass {
+  background: #e4f7ec;
+  color: #19734f;
+}
+.tag.progress {
+  background: #e6f1ff;
+  color: #285f9e;
+}
+.panel-head,
+.next-item,
+.action-card,
+.summary-grid .stat:nth-child(odd),
+.summary-grid .stat:nth-child(-n + 2) {
+  border-color: #e6e9f4;
+}
+.focus {
+  background: linear-gradient(135deg, #1e2850, #352a66 58%, #0f7476);
+}
+.focus .eyebrow {
+  color: #a5eee0;
+}
+.focus p {
+  color: #d2d9ef;
+}
+.focus button {
+  background: #a5eee0;
+  color: #183b4d;
+}
+.step-num {
+  background: #e0f7f3;
+  color: #08736f;
+}
+.tabs,
+.growth-tabs {
+  background: #ecebfa;
+}
+.tabs button.selected,
+.growth-tabs button.selected {
+  background: #fff;
+  color: #45316f;
+  box-shadow: 0 2px 6px #33215a1a;
+}
+.growth-tabs button {
+  color: #5a6681;
+}
+.growth-goal {
+  background: linear-gradient(110deg, #eaf5f3, #f0ecfb 58%, #eaf3fd);
+  border-color: #d8d7ef;
+}
+.growth-goal small {
+  color: #5d438c;
+}
+.growth-goal h2 {
+  color: #38305f;
+}
+.growth-summary-stats .stat:nth-child(1) {
+  background: #f1effc;
+  border-color: #ded8f2;
+}
+.growth-summary-stats .stat:nth-child(2) {
+  background: #eaf7f5;
+  border-color: #d3ebe6;
+}
+.growth-summary-stats .stat:nth-child(3) {
+  background: #fff6e8;
+  border-color: #f3dfba;
+}
+.growth-simple .growth-panel:nth-child(1) {
+  border-color: #d6e3f2;
+}
+.growth-simple .growth-panel:nth-child(2) {
+  border-color: #ded6ef;
+}
+.growth-none {
+  color: #158161;
+}
+.growth-more {
+  border-color: #dedff0;
+  background: #fdfdff;
+}
+.growth-more > summary {
+  color: #474268;
+}
+.growth-more > summary::marker {
+  color: #7355a2;
+}
+.growth-more[open] > summary {
+  background: #f4f1fc;
+  border-bottom-color: #e3dff2;
+}
+.growth-simple-task {
+  background: #f7f8fe;
+  border-color: #e0e1f0;
+  color: #393f67;
+}
+.growth-simple-task:hover {
+  background: #efecfb;
+  border-color: #cfc6ea;
+}
+.growth-simple-milestones strong {
+  color: #66469b;
+}
+.growth-channel-list article {
+  background: #fcfcff;
+  border-color: #e2e2f0;
+}
+.growth-budget {
+  color: #4b3975;
+}
+.growth-funnel article {
+  background: #eef5fb;
+}
+.growth-funnel span,
+.growth-simple-footer p,
+.growth-panel small {
+  color: #69738b;
+}
