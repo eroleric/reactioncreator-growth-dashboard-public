@@ -203,6 +203,7 @@ function adminActionCard(o) {
 function taskDetail(id, currentNote = "", currentBlocker = "") {
   const t = data.tasks.find((item) => item.id === id);
   if (!t) return;
+  if (t.lifecycle === "PRE_LAUNCH") return prelaunchTaskEditor(t, currentNote, currentBlocker);
   if (t.execution) return growthTaskDetail(t, currentNote, currentBlocker);
   const phase = data.phases.find((item) => item.id === t.phaseId),
     w = t.workbook || {},
@@ -282,9 +283,17 @@ function plan(growthLibrary = false) {
     (growthLibrary ? growthNavigation() : prelaunchNavigation()) +
     taskStatusPanel +
     `<div class="task-toolbar section-gap"><div><h2>Tasks</h2><p>Green is an AI task. Yellow needs admin help. Critical marks recurring daily, weekly or monthly work.</p></div><div class="toolbar"><select id="task-scope" aria-label="Choose task group"><option value="all" ${planTaskView === "all" ? "selected" : ""}>All tasks</option><option value="critical" ${planTaskView === "critical" ? "selected" : ""}>Critical recurring</option><option value="ready" ${planTaskView === "ready" ? "selected" : ""}>AI tasks</option><option value="admin" ${planTaskView === "admin" ? "selected" : ""}>Admin help needed</option></select><input id="task-search" type="search" placeholder="Search tasks…" aria-label="Search tasks"><select id="task-filter" aria-label="Filter tasks by status"><option value="ALL">All statuses</option>${["BLOCKED", "IN PROGRESS", "NOT STARTED", "COMPLETE"].map((s) => `<option value="${s}">${label(s)}</option>`).join("")}</select></div></div><div class="status-count" id="task-count"></div><section class="task-board" id="tasks"></section>${feedbackPanel}<section class="section-gap"><div class="page-head compact-head"><div><div class="eyebrow">${esc(gateGroup.toUpperCase())} READINESS</div><h2>Evidence before the next lifecycle step</h2><p>Open a check to review its meaning, evidence, owner and required action.</p></div></div><div class="callout">${gateGroup === "Launch" ? "Official launch requires every launch check plus the final team decision." : "Creator outreach waits for social proof and recruitment readiness."}</div><div id="gate-count" class="status-count"></div><div id="gates" class="gate-list"></div></section>`;
-  if (current !== "GROWTH") {
+  const taskHelper = document.querySelector(".task-toolbar p");
+  if (current === "GROWTH") {
+    const recurringOption = $("#task-scope option[value='critical']");
+    if (recurringOption) {
+      recurringOption.value = "recurring";
+      recurringOption.textContent = "Recurring";
+      recurringOption.insertAdjacentHTML("afterend", `<option value="one-time" ${planTaskView === "one-time" ? "selected" : ""}>One Time</option>`);
+    }
+    if (taskHelper) taskHelper.textContent = "Recurring tasks repeat on a schedule. One Time tasks happen when their individual trigger applies.";
+  } else {
     $("#task-scope option[value='critical']")?.remove();
-    const taskHelper = document.querySelector(".task-toolbar p");
     if (taskHelper) taskHelper.textContent = "Green is an AI task. Yellow needs admin help.";
   }
   const render = () => {
@@ -297,8 +306,10 @@ function plan(growthLibrary = false) {
           ? taskIsAI(t)
           : group === "admin"
             ? taskNeedsAdmin(t)
-            : current === "GROWTH" && group === "critical"
+            : current === "GROWTH" && group === "recurring"
               ? Boolean(growthTaskCadence(t))
+              : current === "GROWTH" && group === "one-time"
+                ? !growthTaskCadence(t)
             : true,
       ),
       rows = grouped.filter(
@@ -309,7 +320,7 @@ function plan(growthLibrary = false) {
             .includes(q),
       ).sort((a, b) => Number(Boolean(growthTaskCadence(b))) - Number(Boolean(growthTaskCadence(a))) || a.sourceRow - b.sourceRow);
     $("#task-count").textContent =
-      `${rows.length} of ${grouped.length} ${group === "ready" ? "AI" : group === "admin" ? "admin-help" : group === "critical" ? "critical recurring" : "lifecycle"} tasks`;
+      `${rows.length} of ${grouped.length} ${group === "ready" ? "AI" : group === "admin" ? "admin-help" : group === "recurring" ? "recurring" : group === "one-time" ? "one-time" : "lifecycle"} tasks`;
     const taskCard = (t) => {
           const phase = data.phases.find((p) => p.id === t.phaseId),
             status = taskStatus(t),
@@ -341,6 +352,76 @@ function plan(growthLibrary = false) {
   if (!gateGroup) $("#gates")?.closest("section")?.remove();
   if (gateGroup) showGates(gateGroup);
 }
+const prelaunchDrafts = new Map();
+let prelaunchSearch = "", prelaunchFilter = "active";
+const prelaunchStatuses = ["NOT STARTED", "IN PROGRESS", "BLOCKED", "COMPLETE"];
+const prelaunchNote = t => adminState.taskNotes?.[t.id] ?? t.evidence ?? "";
+function prelaunchTaskEditor(t, currentNote = "", currentBlocker = "") {
+  const recordedNote = currentNote || prelaunchNote(t);
+  const recordedBlocker = currentBlocker || adminState.taskBlockers?.[t.id] || t.blockedReason || "";
+  const longRecord = packTaskText(recordedNote, recordedBlocker).length > 1000;
+  const draft = prelaunchDrafts.get(t.id) || {
+    status: taskStatus(t), note: longRecord ? "" : recordedNote,
+    blocker: recordedBlocker,
+  };
+  const phase = data.phases.find(p => p.id === t.phaseId);
+  openDetail("PRE-LAUNCH · NOTES & UPDATE", t.title, `<form class="prelaunch-editor" data-prelaunch-editor="${esc(t.id)}">
+    <p class="subtle">${esc(phase?.title || t.phaseId)} · ${esc(t.id)}</p>
+    <p>${esc(t.success)}</p>
+    <label>Task status<select name="status" required>${!prelaunchStatuses.includes(draft.status) ? '<option value="">Choose a status to save an update</option>' : ""}${prelaunchStatuses.map(s => `<option value="${s}" ${draft.status === s ? "selected" : ""}>${label(s)}</option>`).join("")}</select></label>
+    <label class="prelaunch-blocker" ${draft.status === "BLOCKED" ? "" : "hidden"}>What is holding this up?<textarea name="blocker" rows="2" maxlength="900" placeholder="What do you need to continue?">${esc(draft.blocker)}</textarea></label>
+    ${longRecord ? '<p class="subtle">The earlier detailed note is preserved below. Write a short new update here.</p>' : ""}
+    <label>Admin notes & evidence<textarea name="note" rows="7" maxlength="1000" placeholder="What happened? Add observations, decisions, links, or the next step.">${esc(draft.note)}</textarea></label>
+    <div class="prelaunch-note-help"><span>Completion needs evidence. Blocked tasks need a reason.</span><span data-note-capacity></span></div>
+    <div class="prelaunch-editor-actions"><button type="submit">Save update</button><span role="status" aria-live="polite" data-editor-status>${prelaunchDrafts.has(t.id) ? "Unsaved draft — kept while you browse" : "Updates are shared across devices"}</span></div>
+    ${growthMore("Recorded evidence", `<div class="task-note-expanded">${formatTaskNote(data.adminState?.taskNotes?.[t.id] || t.evidence || recordedNote)}</div>`)}
+    ${taskNeedsAdmin(t) ? growthMore("Admin steps", taskAdminSteps(t)) : ""}
+    ${growthMore("Guidance & source record", `<p>${esc(t.workbook?.guidance || "No additional guidance recorded.")}</p><p><strong>Source status:</strong> ${esc(t.status)}</p><p><strong>Original target:</strong> ${esc(t.target || "Not recorded")}</p><p>${esc(t.source || "")}</p><p>Saved updates do not by themselves approve outreach, spending or launch.</p>`)}
+  </form>`);
+  updatePrelaunchCapacity($("[data-prelaunch-editor]"));
+}
+function readPrelaunchDraft(form) {
+  return { status: form.elements.status.value, note: form.elements.note.value, blocker: form.elements.blocker.value };
+}
+function updatePrelaunchCapacity(form) {
+  const draft = readPrelaunchDraft(form);
+  const remaining = 1000 - packTaskText(draft.note.trim(), draft.blocker.trim()).length;
+  form.querySelector("[data-note-capacity]").textContent = remaining < 0 ? `${-remaining} characters over the limit` : `${remaining} characters available`;
+}
+document.addEventListener("input", event => {
+  const form = event.target.closest("[data-prelaunch-editor]");
+  if (!form) return;
+  prelaunchDrafts.set(form.dataset.prelaunchEditor, readPrelaunchDraft(form));
+  form.querySelector(".prelaunch-blocker").hidden = form.elements.status.value !== "BLOCKED";
+  form.querySelector("[data-editor-status]").textContent = "Unsaved draft — kept while you browse";
+  updatePrelaunchCapacity(form);
+});
+document.addEventListener("submit", async event => {
+  const form = event.target.closest("[data-prelaunch-editor]");
+  if (!form) return;
+  event.preventDefault();
+  const id = form.dataset.prelaunchEditor, draft = readPrelaunchDraft(form);
+  prelaunchDrafts.set(id, draft);
+  const message = form.querySelector("[data-editor-status]");
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  message.textContent = "Saving…";
+  try {
+    await saveSharedTask(id, draft.status, draft.note.trim(), draft.blocker.trim());
+    if (JSON.stringify(prelaunchDrafts.get(id)) === JSON.stringify(draft)) {
+      prelaunchDrafts.delete(id);
+      message.textContent = "Saved for everyone";
+    } else message.textContent = "Earlier update saved. Save your latest changes when ready.";
+    if (view === "plan" && activeLifecycle() === "PRE_LAUNCH") plan();
+  } catch (error) {
+    message.textContent = `${error.message} Your draft is still here; try saving again.`;
+  } finally { button.disabled = false; }
+});
+window.addEventListener("beforeunload", event => {
+  if (!prelaunchDrafts.size) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
 function prelaunchNavigation() {
   const selected = prelaunchTab === "records" ? "work" : prelaunchTab;
   return `<nav class="growth-tabs" aria-label="Pre-launch sections">${[["home", "Summary"], ["roadmap", "Roadmap"], ["work", "Tasks"], ["readiness", "Readiness"]].map(([id, title]) => `<button data-prelaunch-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
@@ -351,19 +432,20 @@ function prelaunch() {
   const next = nextLifecycleTask("PRE_LAUNCH");
   const owners = data.owners.filter(o => ["OPEN", "BLOCKED"].includes(o.status) && !/GR:/.test(o.blocks));
   const feedback = data.registeredFeedback;
-  const links = items => `<div class="growth-simple-tasks">${items.map(t => `<button class="growth-simple-task" data-task-detail="${esc(t.id)}"><span>${esc(t.title)}</span><small>${esc(["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].includes(taskStatus(t)) ? label(taskStatus(t)) : "Review task update")}</small></button>`).join("")}</div>`;
+  const links = items => `<div class="prelaunch-task-list">${items.map(t => `<article class="prelaunch-task-card"><div class="prelaunch-task-heading"><h3>${esc(t.title)}</h3>${tag(prelaunchStatuses.includes(taskStatus(t)) ? taskStatus(t) : "Review task update")}</div><p class="prelaunch-note-preview">${esc(prelaunchDrafts.get(t.id)?.note || prelaunchNote(t) || "No notes yet. Add an update, decision or evidence.")}</p><div class="prelaunch-task-footer"><small>${esc(t.id)} · ${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}${prelaunchDrafts.has(t.id) ? " · Unsaved draft" : ""}</small><button class="quiet" data-task-detail="${esc(t.id)}">Notes & update status →</button></div></article>`).join("")}</div>`;
   let body = "";
   if (prelaunchTab === "home") {
     body = `<section class="growth-goal"><div><small>OUR NEXT GOAL</small><h2>Learn from 10 creators. Get ready to launch.</h2><p>Prepare the product and public presence, collect useful feedback, then fix and retest.</p></div><span class="tag neutral">Pre-launch only</span></section>`;
     body += `<section class="stats growth-summary-stats">${stat("Tasks complete", `${summary.counts.complete} <span>/ ${summary.total}</span>`, "Across the pre-launch plan")}${stat("Useful feedback", `${feedback == null ? "—" : feedback} <span>/ 10</span>`, feedback == null ? "Not measured yet" : "Learn at 3, 6 and 10 creators")}${stat("Open admin actions", owners.length, "Decisions, access or hands-on help")}</section>`;
-    body += `<div class="growth-grid">${growthPanel("AI’s next task", next ? `<h3>${esc(next.title)}</h3><p>${esc(next.success)}</p><button class="quiet" data-task-detail="${esc(next.id)}">View task</button><p class="subtle">Codex checks this task’s dependencies before starting.</p>` : '<p>No unfinished AI task is available.</p>')}${growthPanel(owners.length ? "Your action needed" : "Your actions", owners.length ? `<p>${owners.length} open ${owners.length === 1 ? "action" : "actions"}. Open an item for the exact steps.</p>${owners.map(o => growthMore(esc(o.trigger), `<h3>Admin steps</h3>${instructionSteps(o.action)}<p><strong>When:</strong> ${esc(o.trigger)}</p><p><strong>Unlocks:</strong> ${esc(o.blocks)}</p>`)).join("")}` : '<p class="growth-none">Nothing needed from you.</p>')}</div>`;
+    body += `<div class="growth-grid">${growthPanel("AI’s next task", next ? `<h3>${esc(next.title)}</h3><p>${esc(next.success)}</p><button class="quiet" data-task-detail="${esc(next.id)}">Notes & update status</button><p class="subtle">Codex checks this task’s dependencies before starting.</p>` : '<p>No unfinished AI task is available.</p>')}${growthPanel(owners.length ? "Your action needed" : "Your actions", owners.length ? `<p>${owners.length} open ${owners.length === 1 ? "action" : "actions"}. Open an item for the exact steps.</p>${owners.map(o => growthMore(esc(o.trigger), `<h3>Admin steps</h3>${instructionSteps(o.action)}<p><strong>When:</strong> ${esc(o.trigger)}</p><p><strong>Unlocks:</strong> ${esc(o.blocks)}</p><div class="prelaunch-action-links">${tasks.filter(t => (o.blocks.match(/(?:WB:)?[A-Z]\d{2}[A-Z]?/g) || []).some(id => t.id === (id.startsWith("WB:") ? id : `WB:${id}`))).map(t => `<button type="button" class="quiet" data-task-detail="${esc(t.id)}">Update ${esc(t.id.replace("WB:", ""))} & notes</button>`).join("")}<button type="button" class="text-btn" data-project-notepad>Add a project note</button></div>`)).join("")}` : '<p class="growth-none">Nothing needed from you.</p>')}</div>`;
+    body += `<section class="panel prelaunch-notepad"><div class="panel-head"><div><h2>Project notepad</h2><p>Quick reminders, decisions and questions. This is the same shared note shown on Overview.</p></div><span id="note-status" class="save-status" role="status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><label for="admin-note">Admin notes</label><textarea id="admin-note" rows="4" maxlength="3000" placeholder="Jot down what to follow up on…">${esc(adminState.overviewNote)}</textarea><small>Saved automatically. Use a task’s notes for task-specific evidence.</small></div></section>`;
     body += `<div class="growth-simple-footer"><p>Independent work can move forward together. Each task keeps its own dependencies.</p><button class="text-btn" data-prelaunch-tab="work">Browse pre-launch tasks →</button></div>`;
   } else if (prelaunchTab === "roadmap") {
     const phases = data.phases.filter(p => tasks.some(t => t.phaseId === p.id));
     body = `<div class="growth-intro"><h2>The path to launch</h2><p>Seven areas of work, with fixes and retests between feedback waves.</p></div>`;
     body += growthPanel("The pre-launch plan", `<p class="subtle">Open an area to see its tasks. These areas can move forward together when their dependencies allow.</p><div class="growth-simple-phases">${phases.map(p => { const items = tasks.filter(t => t.phaseId === p.id); const done = items.filter(t => taskStatus(t) === "COMPLETE").length; return growthMore(`<span class="growth-phase-name">${esc(p.title)}</span><span class="growth-phase-description">${done} of ${items.length} tasks complete</span>`, `${links(items)}<button class="text-btn" data-phase="${esc(p.id)}">Phase details →</button>`); }).join("")}</div>`);
   } else if (prelaunchTab === "work") {
-    body = `<div class="growth-intro"><h2>Find the work you need</h2><p>Scan the task list, then open a task for instructions and evidence.</p></div><div class="toolbar"><input id="prelaunch-search" type="search" aria-label="Search pre-launch tasks" placeholder="Search tasks…"><select id="prelaunch-filter" aria-label="Filter pre-launch tasks"><option value="active">Unfinished tasks</option><option value="ai">AI tasks</option><option value="admin">Admin help needed</option><option value="complete">Completed tasks</option><option value="all">All tasks</option></select></div><p id="prelaunch-count" class="status-count" aria-live="polite"></p><div id="prelaunch-tasks"></div><div class="growth-simple-footer"><p>Need to update a status or add evidence?</p><button class="text-btn" data-prelaunch-tab="records">Edit detailed task records →</button></div>`;
+    body = `<div class="growth-intro"><h2>Find the work you need</h2><p>Open any task to add notes, change its status, or explain a blocker.</p></div><div class="toolbar"><input id="prelaunch-search" type="search" aria-label="Search pre-launch tasks" placeholder="Search tasks or notes…" value="${esc(prelaunchSearch)}"><select id="prelaunch-filter" aria-label="Filter pre-launch tasks"><option value="active">Unfinished tasks</option><option value="ai">AI tasks</option><option value="admin">Admin help needed</option><option value="complete">Completed tasks</option><option value="notes">With notes</option><option value="all">All tasks</option></select></div><p id="prelaunch-count" class="status-count" aria-live="polite"></p><div id="prelaunch-tasks"></div><div class="growth-simple-footer"><p>Prefer to edit several tasks on one page?</p><button class="text-btn" data-prelaunch-tab="records">Edit detailed task records →</button></div>`;
   } else {
     body = `<div class="growth-intro"><h2>Evidence before the next step</h2><p>Review social proof before outreach, and launch checks before the final launch decision.</p></div>`;
     body += growthPanel("Feedback progress", `<p><strong>${feedback == null ? "Not measured yet" : `${feedback} of 10 useful feedback completions`}</strong></p><div class="feedback-dots" aria-label="${feedback ?? "Unknown"} of 10 feedback participants">${Array.from({ length: 10 }, (_, i) => `<i class="${feedback != null && i < feedback ? "done" : ""}"></i>`).join("")}</div><div class="feedback-markers"><span>3 · learn</span><span>6 · fix and retest</span><span>10 · validate</span></div>`);
@@ -372,10 +454,12 @@ function prelaunch() {
   $("#main").innerHTML = head("Pre-Launch", "See what’s next, where help is needed, and how launch preparation is progressing.") + prelaunchNavigation() + `<div class="growth-workspace growth-simple prelaunch-workspace">${body}</div>`;
   if (prelaunchTab === "readiness") showGates("Social proof");
   if (prelaunchTab === "work") {
+    $("#prelaunch-filter").value = prelaunchFilter;
     const render = () => {
       const query = $("#prelaunch-search").value.trim().toLowerCase();
       const filter = $("#prelaunch-filter").value;
-      const shown = tasks.filter(t => `${t.id} ${t.title} ${t.phaseId}`.toLowerCase().includes(query) && (filter === "all" || (filter === "complete" ? taskStatus(t) === "COMPLETE" : taskStatus(t) !== "COMPLETE" && (filter === "ai" ? taskIsAI(t) : filter === "admin" ? taskNeedsAdmin(t) : true))));
+      prelaunchSearch = $("#prelaunch-search").value; prelaunchFilter = filter;
+      const shown = tasks.filter(t => `${t.id} ${t.title} ${t.phaseId} ${prelaunchNote(t)}`.toLowerCase().includes(query) && (filter === "all" || (filter === "notes" ? Boolean(prelaunchNote(t) || prelaunchDrafts.has(t.id)) : filter === "complete" ? taskStatus(t) === "COMPLETE" : taskStatus(t) !== "COMPLETE" && (filter === "ai" ? taskIsAI(t) : filter === "admin" ? taskNeedsAdmin(t) : true))));
       $("#prelaunch-count").textContent = `${shown.length} of ${tasks.length} pre-launch tasks`;
       $("#prelaunch-tasks").innerHTML = shown.length ? links(shown) : '<p class="empty">No matching tasks.</p>';
     };
@@ -413,24 +497,35 @@ const growthTaskSummary = t => t.execution?.adminSummary || t.success;
 const recurringCadences = new Set(["DAILY", "WEEKLY", "MONTHLY"]);
 const growthTaskCadence = t => recurringCadences.has(t.execution?.cadence) ? t.execution.cadence : "";
 const cadenceLabel = cadence => cadence ? cadence[0] + cadence.slice(1).toLowerCase() : "";
-const criticalBadge = (t, compact = false) => {
+const growthTaskType = t => growthTaskCadence(t) ? "RECURRING" : "ONE_TIME";
+const taskTypeBadge = (t, compact = false) => {
   const cadence = growthTaskCadence(t);
-  return cadence ? `<span class="critical-badge${compact ? " critical-badge-compact" : ""}" title="Recurring ${cadenceLabel(cadence).toLowerCase()} work">Critical · ${cadenceLabel(cadence)}</span>` : "";
+  return cadence
+    ? `<span class="task-type-badge recurring${compact ? " compact" : ""}" title="Repeats on a ${cadenceLabel(cadence).toLowerCase()} schedule">Recurring · ${cadenceLabel(cadence)}</span>`
+    : `<span class="task-type-badge one-time${compact ? " compact" : ""}" title="Complete when its individual trigger applies">One Time</span>`;
 };
-function criticalRecurringSummary(tasks, compact = false) {
-  const grouped = ["DAILY", "WEEKLY", "MONTHLY"].map(cadence => ({
-    cadence,
-    tasks: tasks.filter(t => growthTaskCadence(t) === cadence),
-  })).filter(group => group.tasks.length);
-  if (!grouped.length) return "";
-  const content = grouped.map(group => `<article class="critical-group"><div class="critical-group-head"><span class="critical-badge">Critical · ${cadenceLabel(group.cadence)}</span><strong>${group.tasks.length} ${group.tasks.length === 1 ? "task" : "tasks"}</strong></div><ul>${group.tasks.map(t => `<li><button class="text-btn" data-task-detail="${esc(t.id)}">${esc(growthTaskTitle(t))}</button></li>`).join("")}</ul></article>`).join("");
-  return `<section class="growth-critical${compact ? " growth-critical-compact" : ""}"><div class="growth-critical-intro"><div class="eyebrow">START HERE</div><h2>Critical recurring work</h2><p>Do these tasks first when running daily, weekly or monthly Growth work. Event-based tasks are listed separately.</p></div><div class="critical-groups">${content}</div></section>`;
+const criticalBadge = (t, compact = false) => t.lifecycle === "GROWTH" ? taskTypeBadge(t, compact) : "";
+function taskTypeSummary(tasks) {
+  const recurring = tasks.filter(t => growthTaskType(t) === "RECURRING");
+  const oneTime = tasks.filter(t => growthTaskType(t) === "ONE_TIME");
+  const cadenceCounts = ["DAILY", "WEEKLY", "MONTHLY"].map(cadence => `${recurring.filter(t => growthTaskCadence(t) === cadence).length} ${cadenceLabel(cadence).toLowerCase()}`).join(" · ");
+  return `<section class="growth-task-types"><article class="task-type-summary recurring"><span class="task-type-badge recurring">Recurring</span><h2>${recurring.length} repeating tasks</h2><p>Run these on their daily, weekly or monthly schedule.</p><small>${esc(cadenceCounts)}</small></article><article class="task-type-summary one-time"><span class="task-type-badge one-time">One Time</span><h2>${oneTime.length} event-triggered tasks</h2><p>Use these when the task’s individual condition is met.</p><small>They do not repeat on a fixed schedule.</small></article></section>`;
+}
+function oneTimeTaskList(tasks) {
+  const button = t => `<button class="growth-simple-task ${growthTaskType(t) === "RECURRING" ? "recurring-simple-task" : "one-time-simple-task"}" data-task-detail="${esc(t.id)}" data-growth-searchable="${esc(`${t.id} ${growthTaskTitle(t)} ${growthTaskSummary(t)}`.toLowerCase())}"><span class="growth-simple-task-copy">${taskTypeBadge(t, true)}${esc(growthTaskTitle(t))}</span><small>${esc(label(taskStatus(t)))}</small></button>`;
+  const matching = tasks.filter(t => growthTaskType(t) === "ONE_TIME").sort((a, b) => a.sourceRow - b.sourceRow);
+  return `<section class="growth-task-type-list one-time"><header><span class="task-type-badge one-time">One Time</span><strong>${matching.length} tasks</strong><p>Use these when the listed condition or opportunity occurs.</p></header><div class="growth-simple-tasks">${matching.map(button).join("")}</div></section>`;
+}
+function routineTaskList(tasks, routineId) {
+  const cadence = routineId.toUpperCase();
+  const matching = tasks.filter(t => growthTaskCadence(t) === cadence).sort((a, b) => a.sourceRow - b.sourceRow);
+  return `<div class="routine-task-list"><div class="routine-task-list-head"><span class="task-type-badge recurring">Recurring</span><strong>${matching.length} ${matching.length === 1 ? "task" : "tasks"}</strong></div><ul>${matching.map(t => `<li><button class="text-btn" data-task-detail="${esc(t.id)}">${esc(growthTaskTitle(t))}</button></li>`).join("")}</ul></div>`;
 }
 const growthMore = (title, body, extra = "") => `<details class="growth-more ${extra}"><summary>${title}</summary><div class="growth-more-body">${body}</div></details>`;
 function growthTaskDetail(t, currentNote = "", currentBlocker = "") {
   const packet = data.growthSystem.approvals.find(p => p.status === "READY" && p.taskIds.includes(t.id));
   const note = currentNote || adminState.taskNotes?.[t.id] || t.evidence;
-  openDetail("AI TASK", growthTaskTitle(t), `<div class="growth-simple-detail">${tag(taskStatus(t))}${criticalBadge(t)}<p class="growth-lead">${esc(growthTaskSummary(t))}</p>${taskStatus(t) === "BLOCKED" ? `<p><strong>What is holding this up:</strong> ${esc(currentBlocker || blockedReason(t))}</p>` : ""}<h3>Your part</h3>${packet ? `<h4>Admin steps</h4>${taskAdminSteps(t)}` : '<p>None now. AI handles the preparation and asks when a decision is ready.</p>'}<button class="quiet" data-growth-brief="${esc(t.id)}">Copy instructions for Codex</button><p class="subtle">Paste into Codex to request this task. Copying does not start it.</p>${growthMore("Latest task note", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${growthMore("Full AI instructions", `<p class="subtle">${esc(t.id)}</p>${growthRecipe(t)}<h3>Success looks like</h3><p>${esc(t.success)}</p>`)}</div>`);
+  openDetail("AI TASK", growthTaskTitle(t), `<div class="growth-simple-detail">${tag(taskStatus(t))}${taskTypeBadge(t)}<p class="growth-lead">${esc(growthTaskSummary(t))}</p>${taskStatus(t) === "BLOCKED" ? `<p><strong>What is holding this up:</strong> ${esc(currentBlocker || blockedReason(t))}</p>` : ""}<h3>Your part</h3>${packet ? `<h4>Admin steps</h4>${taskAdminSteps(t)}` : '<p>None now. AI handles the preparation and asks when a decision is ready.</p>'}<button class="quiet" data-growth-brief="${esc(t.id)}">Copy instructions for Codex</button><p class="subtle">Paste into Codex to request this task. Copying does not start it.</p>${growthMore("Latest task note", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${growthMore("Full AI instructions", `<p class="subtle">${esc(t.id)}</p>${growthRecipe(t)}<h3>Success looks like</h3><p>${esc(t.success)}</p>`)}</div>`);
 }
 function growthRecipe(t) {
   const r = t.execution;
@@ -478,8 +573,9 @@ function growth() {
     body += `<div class="growth-grid">${growthPanel("AI’s next task", nextContent)}${growthPanel(pending.length ? "Your action needed" : "Your actions",adminContent)}</div>`;
     body += `<div class="growth-simple-footer"><p>${esc(automation)} AI’s daily and weekly routines are ready to use.</p><button class="text-btn" data-growth-tab="work">See what AI will do →</button></div>`;
   } else if (growthTab === "work") {
-    body = `<div class="growth-intro"><h2>AI handles the ongoing work</h2><p>Research, prepare, carry out approved work, and record the results.</p><p class="subtle">${esc(automation)}</p></div>${criticalRecurringSummary(tasks)}<div class="growth-routines">${simple.routines.map(r => growthPanel(esc(r.title), `<p>${esc(r.summary)}</p>${growthMore("See the steps",`<ol>${r.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol><button class="quiet" data-growth-brief="${esc(r.id)}">Copy ${esc(r.id)} instructions</button><p class="subtle">Paste into Codex to request this routine. Copying does not start it.</p>${growthMore("Detailed run instructions", `<ol>${g.routines.find(full=>full.id===r.id).steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol>${docButton("01_STRATEGY/GROWTH_EXECUTION.md","Full operating guide")}`)}`)}`)).join("")}</div>`;
-    body += growthMore(`Browse all ${tasks.length} AI tasks`, `<label class="growth-search-label">Find a task<input id="growth-task-search" type="search" placeholder="Try content, creators or ads"></label><div class="growth-simple-tasks">${tasks.sort((a,b)=>Number(Boolean(growthTaskCadence(b)))-Number(Boolean(growthTaskCadence(a)))||a.sourceRow-b.sourceRow).map(t=>`<button class="growth-simple-task${growthTaskCadence(t) ? " critical-simple-task" : ""}" data-task-detail="${esc(t.id)}" data-growth-searchable="${esc(`${t.id} ${growthTaskTitle(t)} ${growthTaskSummary(t)}`.toLowerCase())}"><span class="growth-simple-task-copy">${criticalBadge(t, true)}${esc(growthTaskTitle(t))}</span><small>${esc(label(taskStatus(t)))}</small></button>`).join("")}</div><p id="growth-search-empty" hidden>No matching tasks.</p><button class="text-btn" data-growth-tab="tasks">Edit detailed task records →</button>`);
+    body = `<div class="growth-intro"><h2>AI handles the ongoing work</h2><p>Research, prepare, carry out approved work, and record the results.</p><p class="subtle">${esc(automation)}</p></div>${taskTypeSummary(tasks)}<div class="growth-routines">${simple.routines.map(r => growthPanel(esc(r.title), `<p>${esc(r.summary)}</p>${routineTaskList(tasks, r.id)}${growthMore("See the steps",`<ol>${r.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol><button class="quiet" data-growth-brief="${esc(r.id)}">Copy ${esc(r.id)} instructions</button><p class="subtle">Paste into Codex to request this routine. Copying does not start it.</p>${growthMore("Detailed run instructions", `<ol>${g.routines.find(full=>full.id===r.id).steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol>${docButton("01_STRATEGY/GROWTH_EXECUTION.md","Full operating guide")}`)}`)}`)).join("")}</div>`;
+    const oneTimeCount = tasks.filter(t => growthTaskType(t) === "ONE_TIME").length;
+    body += growthMore(`Browse ${oneTimeCount} One Time AI tasks`, `<p class="subtle">Recurring tasks are listed above in Every day, Every week and Every month.</p><label class="growth-search-label">Find a one-time task<input id="growth-task-search" type="search" placeholder="Try website, partners or ads"></label>${oneTimeTaskList(tasks)}<p id="growth-search-empty" hidden>No matching tasks.</p><button class="text-btn" data-growth-tab="tasks">Edit detailed task records →</button>`);
     body += growthMore("Recent AI activity", receipts);
     if (pending.length) body = growthPanel("Your action needed",adminContent) + body;
   } else if (growthTab === "strategy") {
@@ -509,7 +605,7 @@ function growth() {
   } else {
     const b = data.budget;
     body = `<div class="growth-intro"><h2>Are we making progress?</h2><p>We track paying customers and whether people finish videos and return.</p></div>` + growthScorecard();
-    body += `<div class="growth-grid">${growthPanel("Budget",`<div class="growth-budget"><strong>${money(b.remaining)}</strong><span>left from the ${money(b.total)} total budget</span></div><p>${money(b.spent)} spent · ${money(b.committed)} committed</p><p>Spending still needs your approval.</p><p><button class="text-btn" data-growth-tab="work">Start with Critical recurring work →</button></p>${growthMore("Planned budget and rules",`${b.allocations.filter(a=>a.amount>0).map(a=>`<div class="allocation"><span>${esc(a.label)}</span><strong>${money(a.amount)}</strong></div>`).join("")}<p>These amounts are plans, not permission to spend.</p>${docButton("09_BUDGET/BUDGET.md","Budget record")}`)}`)}${growthPanel("What’s working?", `<p>${g.experiments.length ? `${g.experiments.length} growth tests recorded.` : "No growth tests have started yet."}</p><p>AI will use results to decide what to keep, improve or stop.</p>${growthMore("Tests and campaign records", `${docButton("08_EXPERIMENTS/EXPERIMENT_BACKLOG.md","Planned tests")}${docButton("08_EXPERIMENTS/EXPERIMENT_LOG.md","Test results")}${docButton("07_CONTENT/CONTENT_RESULTS.csv","Content results")}${docButton("06_OUTREACH/OUTREACH_LOG.csv","Creator conversations")}`)}`)}</div>`;
+    body += `<div class="growth-grid">${growthPanel("Budget",`<div class="growth-budget"><strong>${money(b.remaining)}</strong><span>left from the ${money(b.total)} total budget</span></div><p>${money(b.spent)} spent · ${money(b.committed)} committed</p><p>Spending still needs your approval.</p><p><button class="text-btn" data-growth-tab="work">See Recurring and One Time tasks →</button></p>${growthMore("Planned budget and rules",`${b.allocations.filter(a=>a.amount>0).map(a=>`<div class="allocation"><span>${esc(a.label)}</span><strong>${money(a.amount)}</strong></div>`).join("")}<p>These amounts are plans, not permission to spend.</p>${docButton("09_BUDGET/BUDGET.md","Budget record")}`)}`)}${growthPanel("What’s working?", `<p>${g.experiments.length ? `${g.experiments.length} growth tests recorded.` : "No growth tests have started yet."}</p><p>AI will use results to decide what to keep, improve or stop.</p>${growthMore("Tests and campaign records", `${docButton("08_EXPERIMENTS/EXPERIMENT_BACKLOG.md","Planned tests")}${docButton("08_EXPERIMENTS/EXPERIMENT_LOG.md","Test results")}${docButton("07_CONTENT/CONTENT_RESULTS.csv","Content results")}${docButton("06_OUTREACH/OUTREACH_LOG.csv","Creator conversations")}`)}`)}</div>`;
     body += growthMore("Where the numbers come from", `<p>A click on Install is different from an actual install. Tests and free access do not count as paying customers.</p><div class="growth-funnel">${[["Store visitors","Store visitors"],["Install clicks","Store install clicks"],["Completed acquisitions","Completed acquisitions"],["First video finished","Activated users"],["Created again","Repeat export within 7 days"],["Paying subscribers","Total active subscribers"]].map(([title,key])=>{const m=metric(key);return `<article><small>${esc(title)}</small><strong>${display(m.value)}</strong><span>${m.value==='UNKNOWN' ? 'Not measured yet' : esc(m.asOf)}</span></article>`}).join("")}</div><p>AI checks repeat use after a full week and paid conversion after two weeks. Unfinished observation periods stay pending.</p>${docButton("03_ANALYTICS/METRICS.md","Full measurement record")}`);
     body += growthMore("Automatic runs and connected tools", `<p>${esc(automation)}</p><p>Last run: ${esc(g.scheduler.lastRun || "None recorded")} · Next run: ${esc(g.scheduler.nextRun || "Not scheduled")}</p><div class="growth-connections">${g.integrations.map(i=>`<article><h3>${esc(i.name)}</h3><p>${esc(i.status)}</p>${growthMore("Technical details",`<p>${esc(i.route)}</p>${docButton(i.source,"Source record")}`)}</article>`).join("")}</div>`);
     body += growthMore("Recent AI activity", receipts);
@@ -1017,6 +1113,7 @@ async function autoSaveGate(container) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.hasAttribute("data-project-notepad")) { $("#admin-note")?.focus(); $("#admin-note")?.scrollIntoView({block:"center", behavior:"smooth"}); return; }
   if (b.dataset.prelaunchTab) {
     prelaunchTab = b.dataset.prelaunchTab;
     if (prelaunchTab === "records") planTaskView = "all";
