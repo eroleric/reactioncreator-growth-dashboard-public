@@ -501,7 +501,7 @@ function growth() {
     const roadmapStages = g.milestones.map((m, index) => {
       const state = stageState(m.target);
       const isSelected = m.target === selectedTarget;
-      return `<button class="roadmap-step ${state}${isSelected ? " selected" : ""}" data-roadmap-target="${m.target}" aria-pressed="${isSelected}"><span class="roadmap-step-marker">${state === "complete" ? "✓" : index + 1}</span><span class="roadmap-step-copy"><small>${state === "complete" ? "Reached" : state === "current" ? "Now" : "Later"}</small><strong>${m.target} subscribers</strong><em>${esc(m.name || m.focus)}</em></span></button>`;
+      return `<button class="roadmap-step ${state}${isSelected ? " selected" : ""}" data-roadmap-target="${m.target}" aria-label="Stage ${index + 1}: ${m.target} subscribers, ${esc(m.name || m.focus)}" aria-pressed="${isSelected}"><span class="roadmap-step-marker">${state === "complete" ? "✓" : index + 1}</span><span class="roadmap-step-copy"><small>${state === "complete" ? "Reached" : state === "current" ? "Now" : "Later"}</small><strong>${m.target}<span> subscribers</span></strong><em>${esc(m.name || m.focus)}</em></span></button>`;
     }).join("");
     const selectedState = stageState(selected.target);
     const selectedStatus = selectedState === "complete" ? "Milestone reached" : selectedState === "current" ? "Current focus" : "Future stage";
