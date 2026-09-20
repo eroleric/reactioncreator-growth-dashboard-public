@@ -614,6 +614,62 @@ function growthMetricCard(key, title, explanation = "") {
 function growthScorecard() {
   return `<section class="stats growth-stats">${growthMetricCard("Total active subscribers","Paying subscribers")}${growthMetricCard("MRR","Monthly recurring revenue")}${growthMetricCard("Activated users","Users who finished a first video","A successful saved export.")}${growthMetricCard("Repeat export within 7 days","Users who created again","Another video on a later day within a week.")}</section>`;
 }
+const growthStrengthAxes = [
+  { phaseId: "G-01", short: "Demand", title: "Demand generation" },
+  { phaseId: "G-02", short: "Conversion", title: "Store & website conversion" },
+  { phaseId: "G-03", short: "Content", title: "Content engine" },
+  { phaseId: "G-04", short: "Partners", title: "Creator partnerships & community" },
+  { phaseId: "G-05", short: "Activation", title: "Activation & retention" },
+  { phaseId: "G-06", short: "Revenue", title: "Revenue & referrals" },
+  { phaseId: "G-07", short: "Paid growth", title: "Scalable acquisition & budget" },
+  { phaseId: "G-08", short: "Learning", title: "Measurement & learning" },
+];
+const growthReceiptWeight = (status) => ({ COMPLETE: 1, IN_PROGRESS: .45, BLOCKED: .15, FAILED: .1 })[status] || 0;
+function hasGrowthEvidence(task, receipts) {
+  const sharedNote = adminState.taskNotes?.[task.id]?.trim(),
+    sourceEvidence = String(task.evidence || "").trim(),
+    usefulSource = sourceEvidence && !/^(NOT STARTED|UNKNOWN|NO POST-LAUNCH|NO PAID|NO GROWTH)/i.test(sourceEvidence),
+    usefulReceipt = receipts.some((receipt) => receipt.evidence?.trim() || receipt.output?.trim());
+  return Boolean(sharedNote || usefulSource || usefulReceipt);
+}
+function growthStrengthScores(tasks) {
+  const runs = data.growthSystem?.runs || [];
+  return growthStrengthAxes.map((axis) => {
+    const phaseTasks = tasks.filter((task) => task.phaseId === axis.phaseId);
+    if (!phaseTasks.length) return { ...axis, score: 0, evidence: 0, total: 0 };
+    let progress = 0,
+      evidence = 0;
+    phaseTasks.forEach((task) => {
+      const receipts = runs.filter((receipt) => receipt.taskId === task.id),
+        savedStatus = taskStatus(task),
+        statusWeight = ({ COMPLETE: 1, "IN PROGRESS": .45, BLOCKED: .15 })[savedStatus] || 0,
+        receiptWeight = receipts.reduce((best, receipt) => Math.max(best, growthReceiptWeight(receipt.status)), 0);
+      progress += Math.max(statusWeight, receiptWeight);
+      if (hasGrowthEvidence(task, receipts)) evidence += 1;
+    });
+    const score = Math.min(5, Number(((progress / phaseTasks.length) * 4 + evidence / phaseTasks.length).toFixed(1)));
+    return { ...axis, score, evidence, total: phaseTasks.length };
+  });
+}
+function growthStrengthRadar(tasks) {
+  const scores = growthStrengthScores(tasks),
+    centerX = 300,
+    centerY = 205,
+    radius = 142,
+    point = (index, value, extra = 0) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / scores.length,
+        distance = radius * (value / 5) + extra;
+      return [centerX + Math.cos(angle) * distance, centerY + Math.sin(angle) * distance];
+    },
+    polygon = (value) => scores.map((_, index) => point(index, value).map((number) => number.toFixed(1)).join(",")).join(" "),
+    dataPoints = scores.map((item, index) => point(index, item.score).map((number) => number.toFixed(1)).join(",")).join(" "),
+    grid = [1, 2, 3, 4, 5].map((level) => `<polygon points="${polygon(level)}"></polygon>`).join(""),
+    axes = scores.map((_, index) => { const [x, y] = point(index, 5); return `<line x1="${centerX}" y1="${centerY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"></line>`; }).join(""),
+    labels = scores.map((item, index) => { const [x, y] = point(index, 5, 34), anchor = x < centerX - 18 ? "end" : x > centerX + 18 ? "start" : "middle"; return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="${anchor}">${esc(item.short)}</text>`; }).join(""),
+    dots = scores.map((item, index) => { const [x, y] = point(index, item.score); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4"><title>${esc(item.title)}: ${item.score} of 5</title></circle>`; }).join(""),
+    weakest = [...scores].sort((a, b) => a.score - b.score || a.phaseId.localeCompare(b.phaseId))[0];
+  return `<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">GROWTH STRENGTH MAP</div><h2>Where we are strong—and where to improve</h2><p>Scores update from saved Growth task status, task evidence, and recorded Growth run receipts.</p></div><span class="tag neutral">Evidence score · 0–5</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="img" aria-label="Eight-area Growth strength spider chart. ${scores.map((item) => `${item.title}: ${item.score} of 5`).join(". ")}"><g class="growth-radar-grid">${grid}${axes}</g><polygon class="growth-radar-shape" points="${dataPoints}"></polygon><g class="growth-radar-dots">${dots}</g><g class="growth-radar-labels">${labels}</g></svg></div><div class="growth-strength-scores">${scores.map((item) => `<div data-strength-phase="${item.phaseId}"><span>${esc(item.title)}</span><strong>${item.score}<small>/5</small></strong><i><b style="--score:${item.score * 20}%"></b></i><small>${item.evidence} of ${item.total} tasks have recorded evidence</small></div>`).join("")}</div></div><div class="growth-strength-foot"><p><strong>Weakest current area:</strong> ${esc(weakest.title)}. Use its strengthening task in AI Work to improve the evidence and score.</p>${growthMore("How the chart learns", `<p>Each area receives up to four points from recorded task or run progress and one point from evidence coverage. Not started work adds nothing. In-progress work, completed work, saved notes, source evidence, and run receipts update the score automatically. The chart is a prioritization aid, not a forecast or proof of business results.</p>`)}</div></section>`;
+}
 function growth() {
   const g = data.growthSystem;
   if (!g) { $("#main").innerHTML = head("Growth", "Refresh to load the growth plan."); return; }
@@ -646,7 +702,8 @@ function growth() {
     body += growthMore("Recent AI activity", receipts);
     if (pending.length) body = growthPanel("Your action needed",adminContent) + body;
   } else if (growthTab === "strategy") {
-    body = `<div class="growth-intro"><h2>How we’ll grow</h2><p>${esc(simple.planSummary)} AI adjusts the plan as results come in.</p></div>`;
+    body = growthStrengthRadar(tasks);
+    body += `<div class="growth-intro"><h2>How we’ll grow</h2><p>${esc(simple.planSummary)} AI adjusts the plan as results come in.</p></div>`;
     body += growthPanel("The growth plan", `<p class="subtle">These areas can move forward together. Open any area to see its tasks.</p><div class="growth-simple-phases">${simple.phases.map(w=>growthMore(`<span class="growth-phase-name">${esc(w.title)}</span><span class="growth-phase-description">${esc(w.summary)}</span>`, `<ul class="growth-task-links">${tasks.filter(t=>t.phaseId===w.id).map(t=>`<li><button class="text-btn" data-task-detail="${esc(t.id)}">${criticalBadge(t, true)}${esc(growthTaskTitle(t))}</button></li>`).join("")}</ul>`)).join("")}</div>`);
     body += growthMore("Our goals: 5 → 10 → 25 → 50 → 100 subscribers", `<div class="growth-simple-milestones">${simple.milestones.map(m=>`<article><strong>${m.target}</strong><span>${esc(m.summary)}</span><button class="text-btn" data-growth-milestone="${m.target}">Details</button></article>`).join("")}</div><p class="subtle">These are goals, not forecasts. AI checks customer results before expanding.</p>`);
     body += growthMore("Where we’ll find customers", `<div class="growth-channel-list">${g.channels.map(c=>`<article><h3>${esc(c.name)}</h3><p>${esc(c.strategy)}</p>${growthMore("How AI checks results",`<p>${esc(c.measure)}</p>${docButton(c.record,"Open results")}`)}</article>`).join("")}</div>`);
