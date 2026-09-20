@@ -1267,26 +1267,6 @@ dialog::backdrop {
   white-space: nowrap;
   border: 0;
 }
-.lifecycle-switch select {
-  appearance: auto;
-  border: 0;
-  border-radius: 9px;
-  background: #e8f2f0;
-  color: #007466;
-  padding: 8px 11px;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 650;
-  cursor: pointer;
-}
-.lifecycle-switch select:focus {
-  outline: 2px solid #64b9ad;
-  outline-offset: 2px;
-}
-.lifecycle-switch select:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
 .task-toolbar {
   display: flex;
   justify-content: space-between;
