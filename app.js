@@ -354,7 +354,7 @@ function showGates(group, openId = "") {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  return `<nav class="growth-tabs" aria-label="Growth sections">${[["home","Summary"],["work","AI work"],["strategy","Growth plan"],["evidence","Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
+  return `<nav class="growth-tabs" aria-label="Growth sections">${[["home","Summary"],["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["evidence","Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
 }
 const growthTaskTitle = t => t.execution?.adminTitle || t.title;
 const growthTaskSummary = t => t.execution?.adminSummary || t.success;
@@ -420,6 +420,18 @@ function growth() {
     body += growthMore("Our goals: 5 → 10 → 25 → 50 → 100 subscribers", `<div class="growth-simple-milestones">${simple.milestones.map(m=>`<article><strong>${m.target}</strong><span>${esc(m.summary)}</span><button class="text-btn" data-growth-milestone="${m.target}">Details</button></article>`).join("")}</div><p class="subtle">These are goals, not forecasts. AI checks customer results before expanding.</p>`);
     body += growthMore("Where we’ll find customers", `<div class="growth-channel-list">${g.channels.map(c=>`<article><h3>${esc(c.name)}</h3><p>${esc(c.strategy)}</p>${growthMore("How AI checks results",`<p>${esc(c.measure)}</p>${docButton(c.record,"Open results")}`)}</article>`).join("")}</div>`);
     body += growthMore("What we’ve learned", `<ul class="growth-plain-lessons"><li>Count real paying customers. Views and clicks alone do not show growth.</li><li>Give new users time to try the app before judging results.</li><li>AI prepares the work; you only step in for decisions or access.</li><li>Automatic publishing must use a supported, authorized account.</li></ul>${docButton("02_RESEARCH/GROWTH_DASHBOARD_RESEARCH.md","Research and sources")}${docButton("08_EXPERIMENTS/LEARNINGS.md","All recorded lessons")}`);
+  } else if (growthTab === "roadmap") {
+    const subscribers = Number(metric("Total active subscribers").value);
+    const hasCount = Number.isFinite(subscribers);
+    const currentTarget = hasCount ? simple.milestones.find(m => subscribers < m.target)?.target : simple.milestones[0].target;
+    const progressLabel = hasCount ? `${subscribers} of ${simple.milestones[simple.milestones.length - 1].target} paying subscribers` : "Subscriber count not measured yet";
+    const stageState = (target) => hasCount && subscribers >= target ? "complete" : target === currentTarget ? "current" : "upcoming";
+    const roadmapCards = simple.milestones.map((m, index) => {
+      const state = stageState(m.target);
+      const detail = g.milestones.find(full => full.target === m.target) || {};
+      return `<article class="roadmap-stage ${state}"><div class="roadmap-stage-top"><span class="roadmap-marker">${state === "complete" ? "✓" : index + 1}</span><span class="roadmap-state">${state === "complete" ? "Reached" : state === "current" ? "Current focus" : "Next stage"}</span></div><h3>${m.target} subscribers</h3><p>${esc(m.summary)}</p><details><summary>What AI focuses on</summary><p>${esc(detail.actions || m.summary)}</p><p><strong>Move forward when:</strong> ${esc(detail.evidence || "Real subscriber evidence supports the next step.")}</p></details></article>`;
+    }).join("");
+    body = `<section class="roadmap-intro"><div><small>THE GROWTH PATH</small><h2>From first customer to repeatable growth</h2><p>Each stage has one job. AI uses real subscriber evidence to decide when the next stage is ready.</p></div><div class="roadmap-progress"><strong>${esc(progressLabel)}</strong><span>${hasCount ? "Current verified position" : "Waiting for a verified baseline"}</span></div></section><section class="roadmap-track" aria-label="Growth milestone roadmap">${roadmapCards}</section><div class="growth-grid roadmap-support"><section class="panel roadmap-loop"><div class="panel-head"><h2>How we move forward</h2></div><div class="panel-body"><div class="roadmap-loop-steps"><span><b>1</b>Observe</span><i>→</i><span><b>2</b>Choose</span><i>→</i><span><b>3</b>Act</span><i>→</i><span><b>4</b>Measure</span><i>→</i><span><b>5</b>Improve</span></div><p class="subtle">A milestone changes the focus. It does not automatically release budget or approve a public action.</p></div></section><section class="panel roadmap-focus"><div class="panel-head"><h2>Where we are now</h2></div><div class="panel-body"><span class="tag ${hasCount ? "progress" : "neutral"}">${hasCount ? `Next target: ${currentTarget} subscribers` : "Need verified subscriber data"}</span><p>${esc(g.focus.constraint)}</p><button class="text-btn" data-growth-tab="home">Return to summary →</button></div></section></div>`;
   } else {
     const b = data.budget;
     body = `<div class="growth-intro"><h2>Are we making progress?</h2><p>We track paying customers and whether people finish videos and return.</p></div>` + growthScorecard();
