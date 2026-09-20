@@ -1,3 +1,48 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
+import { GoogleAuthProvider, getAuth, getIdTokenResult, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import { collection, collectionGroup, doc as firestoreDoc, getDoc, getDocs, getFirestore, limit, orderBy, query, startAfter, where } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js";
+import { getDownloadURL, getStorage, ref as storageRef } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js";
+
+const supportFirebaseApp = initializeApp({
+  projectId: "reaction-creator",
+  appId: "1:684463937847:web:9a72580ac5f743994f22b2",
+  databaseURL: "https://reaction-creator-default-rtdb.firebaseio.com",
+  storageBucket: "reaction-creator.firebasestorage.app",
+  apiKey: "AIzaSyBH8HPv3-voIzAAyJZrm6I1sCUM6wQSZeI",
+  authDomain: "reaction-creator.firebaseapp.com",
+  messagingSenderId: "684463937847",
+});
+initializeAppCheck(supportFirebaseApp, {
+  provider: new ReCaptchaEnterpriseProvider("6LeGEcYtAAAAAO6RI1COe4hz6OOpzyhDvAtBJMiY"),
+  isTokenAutoRefreshEnabled: true,
+});
+const supportAuth = getAuth(supportFirebaseApp);
+const supportDb = getFirestore(supportFirebaseApp);
+const supportFunctions = getFunctions(supportFirebaseApp, "us-central1");
+const supportStorage = getStorage(supportFirebaseApp);
+const supportProvider = new GoogleAuthProvider();
+supportProvider.setCustomParameters({ prompt: "select_account" });
+
+let supportSession = {
+  user: null,
+  admin: false,
+  authReady: false,
+  loading: false,
+  loaded: false,
+  tickets: [],
+  status: "open",
+  selected: null,
+  messages: [],
+  diagnostics: null,
+  cursor: null,
+  hasMore: false,
+  messageOldest: null,
+  messageHasMore: false,
+  error: "",
+};
+
 let data,
   view = "overview",
   activePin = "",
@@ -47,6 +92,7 @@ const titles = {
   plan: "Pre Launch",
   growth: "Growth & budget",
   records: "Project records",
+  support: "Customer support",
 };
 const statusClass = (s) =>
   ({
@@ -1007,8 +1053,164 @@ function navigate() {
     if (a.dataset.view === view) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  ({ overview, plan, growth, records })[view]();
+  ({ overview, plan, growth, records, support })[view]();
   window.scrollTo(0, 0);
+}
+
+const supportCategoryLabel = (value) => ({
+  export: "Export", recording: "Recording", camera_microphone: "Camera / microphone",
+  premium_purchase: "Premium / purchase", feature_request: "Feature request",
+  crash_error: "Crash / error", other: "Other",
+})[value] || "Other";
+const supportDate = (value) => {
+  try { return value?.toDate?.().toLocaleString() || "Unknown date"; }
+  catch { return "Unknown date"; }
+};
+
+function support() {
+  if (!supportSession.authReady) {
+    $("#main").innerHTML = '<section class="panel empty"><h2>Checking support access…</h2></section>';
+    return;
+  }
+  if (!supportSession.user) {
+    $("#main").innerHTML = `<section class="panel support-auth-card"><div class="eyebrow">PRIVATE SUPPORT INBOX</div><h2>Admin sign-in required</h2><p>Sign in with an approved Reaction Creator support account. The dashboard PIN does not grant access to customer data.</p><button data-support-sign-in>Sign in with Google</button>${supportSession.error ? `<p class="support-error">${esc(supportSession.error)}</p>` : ""}</section>`;
+    return;
+  }
+  if (!supportSession.admin) {
+    $("#main").innerHTML = `<section class="panel support-auth-card"><div class="eyebrow">PRIVATE SUPPORT INBOX</div><h2>Verify support access</h2><p>${esc(supportSession.user.email || "This account")} is signed in but does not currently have the <code>support_admin</code> claim. The official support account can activate its claim once.</p><button data-support-bootstrap>Activate support access</button><button class="quiet" data-support-sign-out>Sign out</button>${supportSession.error ? `<p class="support-error">${esc(supportSession.error)}</p>` : ""}</section>`;
+    return;
+  }
+  if (supportSession.selected) { renderSupportConversation(); return; }
+  const options = [["open", "Open"], ["resolved", "Resolved"], ["all", "All"]]
+    .map(([value, label]) => `<option value="${value}" ${supportSession.status === value ? "selected" : ""}>${label}</option>`).join("");
+  const tickets = supportSession.tickets.map((ticket) => `
+    <button class="support-ticket" data-support-open="${esc(ticket.id)}" data-support-uid="${esc(ticket.uid)}">
+      <span><strong>${esc(supportCategoryLabel(ticket.category))}</strong><small>${esc(supportDate(ticket.last_message_at))}</small></span>
+      <span><span class="tag ${ticket.status === "open" ? "progress" : "complete"}">${esc(ticket.status)}</span><small>${ticket.message_count || 0} messages</small></span>
+      ${ticket.last_message_role === "user" ? '<em>Waiting for support</em>' : '<em>Support replied</em>'}
+    </button>`).join("");
+  $("#main").innerHTML = `<section class="support-head"><div><div class="eyebrow">PRIVATE SUPPORT INBOX</div><h2>Customer requests</h2><p>Signed in as ${esc(supportSession.user.email || supportSession.user.uid)}</p></div><button class="quiet" data-support-sign-out>Sign out</button></section><section class="panel"><div class="support-toolbar"><label>Status <select id="support-status">${options}</select></label><button class="quiet" data-support-refresh>Refresh</button></div>${supportSession.error ? `<p class="support-error">${esc(supportSession.error)}</p>` : ""}${supportSession.loading && !tickets ? '<p>Loading requests…</p>' : tickets || '<p class="empty">No requests match this status.</p>'}${supportSession.hasMore ? '<div class="support-more"><button class="quiet" data-support-more>Load older requests</button></div>' : ""}</section>`;
+  $("#support-status")?.addEventListener("change", (event) => {
+    supportSession.status = event.target.value;
+    supportSession.cursor = null; supportSession.tickets = []; loadSupportTickets(true);
+  });
+  if (!supportSession.loaded && !supportSession.loading) loadSupportTickets(true);
+}
+
+async function loadSupportTickets(reset = false) {
+  if (!supportSession.admin) return;
+  supportSession.loading = true;
+  supportSession.error = "";
+  support();
+  try {
+    const base = collectionGroup(supportDb, "supportTickets");
+    const constraints = [];
+    if (supportSession.status !== "all") constraints.push(where("status", "==", supportSession.status));
+    constraints.push(orderBy("last_message_at", "desc"));
+    if (!reset && supportSession.cursor) constraints.push(startAfter(supportSession.cursor));
+    constraints.push(limit(25));
+    const inbox = query(base, ...constraints);
+    const snapshot = await getDocs(inbox);
+    const page = snapshot.docs.map((ticketDoc) => {
+      const parts = ticketDoc.ref.path.split("/");
+      return { id: ticketDoc.id, uid: parts[1], ...ticketDoc.data() };
+    });
+    supportSession.tickets = reset ? page : [...supportSession.tickets, ...page].filter(
+      (ticket, index, all) => all.findIndex((item) => item.id === ticket.id && item.uid === ticket.uid) === index,
+    );
+    supportSession.cursor = snapshot.docs.at(-1) || null;
+    supportSession.hasMore = snapshot.size === 25;
+    supportSession.loaded = true;
+  } catch (error) {
+    supportSession.error = error.message || "Could not load support requests.";
+  } finally {
+    supportSession.loading = false;
+    if (view === "support") support();
+  }
+}
+
+async function openSupportTicket(uid, ticketId) {
+  supportSession.loading = true;
+  supportSession.error = "";
+  supportSession.selected = supportSession.tickets.find((item) => item.id === ticketId && item.uid === uid) || {id: ticketId, uid};
+  support();
+  try {
+    const ticketRef = firestoreDoc(supportDb, "users", uid, "supportTickets", ticketId);
+    const [ticketSnapshot, messageSnapshot, diagnosticsSnapshot] = await Promise.all([
+      getDoc(ticketRef),
+      getDocs(query(collection(ticketRef, "messages"), orderBy("sequence", "desc"), limit(30))),
+      getDoc(firestoreDoc(ticketRef, "details", "diagnostics")),
+    ]);
+    if (!ticketSnapshot.exists()) throw new Error("Ticket no longer exists.");
+    supportSession.selected = {id: ticketId, uid, ...ticketSnapshot.data()};
+    supportSession.messages = messageSnapshot.docs.map((item) => ({id: item.id, ...item.data()})).reverse();
+    supportSession.messageOldest = supportSession.messages[0]?.sequence || null;
+    supportSession.messageHasMore = messageSnapshot.size === 30;
+    supportSession.diagnostics = diagnosticsSnapshot.exists() ? diagnosticsSnapshot.data().values : null;
+  } catch (error) {
+    supportSession.error = error.message || "Could not load this conversation.";
+  } finally {
+    supportSession.loading = false;
+    if (view === "support") support();
+  }
+}
+
+function renderSupportConversation() {
+  const ticket = supportSession.selected;
+  const messages = supportSession.messages.map((message) => `
+    <article class="support-message ${message.sender_role === "admin" ? "admin" : "customer"}">
+      <header><strong>${message.sender_role === "admin" ? "Support" : "Customer"}</strong><small>${esc(supportDate(message.created_at))}</small></header>
+      <p>${esc(message.body)}</p>
+      ${message.attachment?.storage_path ? `<button class="text-btn" data-support-attachment="${esc(message.attachment.storage_path)}">Open screenshot</button>` : ""}
+    </article>`).join("");
+  const diagnostics = supportSession.diagnostics ? Object.entries(supportSession.diagnostics)
+    .map(([key, value]) => `<div><dt>${esc(key.replaceAll("_", " "))}</dt><dd>${esc(value)}</dd></div>`).join("") : "";
+  $("#main").innerHTML = `<button class="text-btn support-back" data-support-back>← Back to inbox</button><section class="support-head"><div><div class="eyebrow">${esc(ticket.id)}</div><h2>${esc(supportCategoryLabel(ticket.category))}</h2><p>${esc(ticket.uid)} · ${esc(ticket.status || "open")}</p></div><button class="quiet" data-support-status="${ticket.status === "resolved" ? "open" : "resolved"}">${ticket.status === "resolved" ? "Reopen" : "Resolve"}</button></section>${supportSession.error ? `<p class="support-error">${esc(supportSession.error)}</p>` : ""}<section class="support-conversation">${supportSession.messageHasMore ? '<button class="text-btn" data-support-messages-more>Load older messages</button>' : ""}${supportSession.loading ? "<p>Loading conversation…</p>" : messages || "<p>No messages.</p>"}</section>${diagnostics ? `<details class="panel support-diagnostics"><summary>Technical diagnostics</summary><dl>${diagnostics}</dl></details>` : ""}<section class="panel support-reply"><label for="support-reply">Reply</label><textarea id="support-reply" maxlength="4000" rows="5" placeholder="Write a reply…"></textarea><div><small id="support-reply-status"></small><button data-support-reply>Send reply</button></div></section>`;
+}
+
+async function loadOlderSupportMessages() {
+  const ticket = supportSession.selected;
+  if (!ticket || !supportSession.messageOldest) return;
+  supportSession.loading = true; support();
+  try {
+    const ticketRef = firestoreDoc(supportDb, "users", ticket.uid, "supportTickets", ticket.id);
+    const snapshot = await getDocs(query(
+      collection(ticketRef, "messages"), where("sequence", "<", supportSession.messageOldest),
+      orderBy("sequence", "desc"), limit(30),
+    ));
+    const older = snapshot.docs.map((item) => ({id: item.id, ...item.data()})).reverse();
+    supportSession.messages = [...older, ...supportSession.messages].filter(
+      (message, index, all) => all.findIndex((item) => item.id === message.id) === index,
+    );
+    supportSession.messageOldest = supportSession.messages[0]?.sequence || null;
+    supportSession.messageHasMore = snapshot.size === 30;
+  } catch (error) { supportSession.error = error.message || "Could not load older messages."; }
+  finally { supportSession.loading = false; support(); }
+}
+
+async function sendSupportReply() {
+  const field = $("#support-reply"), status = $("#support-reply-status"), body = field.value.trim();
+  if (!body) { status.textContent = "Write a reply first."; return; }
+  status.textContent = "Sending…";
+  try {
+    await httpsCallable(supportFunctions, "replyToSupportTicket")({
+      uid: supportSession.selected.uid, ticket_id: supportSession.selected.id,
+      request_id: crypto.randomUUID(), body,
+    });
+    field.value = "";
+    await openSupportTicket(supportSession.selected.uid, supportSession.selected.id);
+  } catch (error) { status.textContent = error.message || "Reply failed."; }
+}
+
+async function changeSupportStatus(status) {
+  try {
+    await httpsCallable(supportFunctions, "updateSupportTicketStatus")({
+      uid: supportSession.selected.uid, ticket_id: supportSession.selected.id, status,
+    });
+    supportSession.selected.status = status;
+    supportSession.loaded = false;
+    support();
+  } catch (error) { supportSession.error = error.message || "Status update failed."; support(); }
 }
 const bytesFromB64 = (value) =>
   Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
@@ -1237,6 +1439,37 @@ async function autoSaveGate(container) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.hasAttribute("data-support-sign-in")) {
+    supportSession.error = "";
+    try { await signInWithPopup(supportAuth, supportProvider); }
+    catch (error) { supportSession.error = error.message || "Sign-in failed."; support(); }
+    return;
+  }
+  if (b.hasAttribute("data-support-sign-out")) { await signOut(supportAuth); return; }
+  if (b.hasAttribute("data-support-bootstrap")) {
+    supportSession.error = "";
+    try {
+      await httpsCallable(supportFunctions, "bootstrapSupportAdmin")({});
+      const token = await getIdTokenResult(supportSession.user, true);
+      supportSession.admin = token.claims.support_admin === true;
+      support();
+    } catch (error) { supportSession.error = error.message || "Access activation failed."; support(); }
+    return;
+  }
+  if (b.hasAttribute("data-support-refresh")) { supportSession.loaded = false; supportSession.cursor = null; supportSession.tickets = []; await loadSupportTickets(true); return; }
+  if (b.hasAttribute("data-support-more")) { await loadSupportTickets(false); return; }
+  if (b.hasAttribute("data-support-messages-more")) { await loadOlderSupportMessages(); return; }
+  if (b.dataset.supportOpen) { await openSupportTicket(b.dataset.supportUid, b.dataset.supportOpen); return; }
+  if (b.hasAttribute("data-support-back")) {
+    supportSession.selected = null; supportSession.messages = []; supportSession.diagnostics = null; support(); return;
+  }
+  if (b.hasAttribute("data-support-reply")) { await sendSupportReply(); return; }
+  if (b.dataset.supportStatus) { await changeSupportStatus(b.dataset.supportStatus); return; }
+  if (b.dataset.supportAttachment) {
+    try { window.open(await getDownloadURL(storageRef(supportStorage, b.dataset.supportAttachment)), "_blank", "noopener"); }
+    catch (error) { supportSession.error = error.message || "Screenshot could not be opened."; support(); }
+    return;
+  }
   if (b.hasAttribute("data-project-notepad")) { $("#admin-note")?.focus(); $("#admin-note")?.scrollIntoView({block:"center", behavior:"smooth"}); return; }
   if (b.dataset.prelaunchTab) {
     prelaunchTab = b.dataset.prelaunchTab;
@@ -1354,6 +1587,26 @@ $("#detail").addEventListener("click", (e) => {
 });
 window.addEventListener("hashchange", navigate);
 $("#pin").focus();
+
+onAuthStateChanged(supportAuth, async (user) => {
+  supportSession.user = user;
+  supportSession.admin = false;
+  supportSession.authReady = true;
+  supportSession.loaded = false;
+  supportSession.tickets = [];
+  supportSession.cursor = null;
+  supportSession.selected = null;
+  supportSession.error = "";
+  if (user) {
+    try {
+      const token = await getIdTokenResult(user, true);
+      supportSession.admin = token.claims.support_admin === true;
+    } catch (error) {
+      supportSession.error = error.message || "Could not verify admin access.";
+    }
+  }
+  if (data && view === "support") support();
+});
 
 document.addEventListener("click", async (event) => {
   const tab = event.target.closest("[data-growth-tab]");
