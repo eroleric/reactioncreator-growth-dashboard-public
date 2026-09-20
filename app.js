@@ -521,6 +521,8 @@ function records() {
 const sharedDashboardApi =
   "https://reaction-creator-default-rtdb.firebaseio.com/dashboard.json";
 const validLifecycles = ["PRE_LAUNCH", "GROWTH"];
+const normalizeLifecycle = (value) =>
+  validLifecycles.includes(value) ? value : "PRE_LAUNCH";
 async function patchSharedDashboard(values) {
   const response = await fetch(sharedDashboardApi, {
     method: "PATCH",
@@ -538,8 +540,12 @@ async function loadSharedDashboardState() {
     const shared = await response.json();
     if (shared && typeof shared.overviewNote === "string")
       adminState.overviewNote = shared.overviewNote;
-    if (validLifecycles.includes(shared?.lifecycle))
-      adminState.project.stage = shared.lifecycle;
+    if (typeof shared?.lifecycle === "string") {
+      const lifecycle = normalizeLifecycle(shared.lifecycle);
+      adminState.project.stage = lifecycle;
+      if (shared.lifecycle !== lifecycle)
+        await patchSharedDashboard({ lifecycle });
+    }
     for (const [id, item] of Object.entries(shared?.tasks || {})) {
       if (
         data.tasks.some((t) => t.id === id) &&
@@ -711,6 +717,7 @@ async function loadAdminState() {
   } catch {
     localStorage.removeItem(localKey);
   }
+  adminState.project.stage = normalizeLifecycle(adminState.project?.stage);
 }
 async function saveAdminState() {
   const salt = crypto.getRandomValues(new Uint8Array(16)),
