@@ -2401,3 +2401,57 @@ dialog::backdrop {
     flex-direction: column;
   }
 }
+.growth-tabs { display:flex; gap:6px; padding:7px; background:#eaf0f3; border-radius:14px; margin:0 0 24px; overflow-x:auto; }
+.growth-tabs button { background:transparent; color:#4a606d; border:0; padding:12px 16px; border-radius:9px; white-space:nowrap; font-weight:650; }
+.growth-tabs button.selected { background:#fff; color:#123d3b; box-shadow:0 2px 5px #172f3910; }
+.growth-workspace { display:grid; gap:22px; }
+.growth-hero { display:grid; grid-template-columns:1.5fr 1fr; gap:36px; background:#132f35; color:#edf8f7; padding:36px; border-radius:18px; }
+.growth-hero h2 { font-size:clamp(28px,3.1vw,43px); line-height:1.15; letter-spacing:-1px; margin:15px 0; }
+.growth-hero p { color:#d1e5e4; line-height:1.65; max-width:620px; }
+.growth-hero .eyebrow,.growth-focus small { color:#8de0d0; font-size:11px; letter-spacing:.09em; font-weight:700; }
+.growth-focus { border-left:1px solid #ffffff26; padding-left:30px; align-self:center; }
+.growth-focus .quiet { background:#c5f6e9; color:#132f35; border:0; }
+.growth-flags { display:flex; gap:8px; flex-wrap:wrap; margin-top:24px; }
+.growth-flags span { border:1px solid #ffffff35; border-radius:6px; font-size:11px; padding:7px 9px; }
+.growth-stats { margin:0; }
+.metric-source { font-size:10px; }
+.growth-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; }
+.growth-panel { min-width:0; margin:0; }
+.growth-panel .panel-head h2 { font-size:18px; }
+.growth-panel h3 { font-size:16px; line-height:1.45; }
+.growth-panel p,.growth-panel li { font-size:13px; line-height:1.65; }
+.growth-panel .panel-body > p:first-child { margin-top:0; }
+.growth-panel .panel-body > p:last-child { margin-bottom:0; }
+.growth-panel small { color:#627886; }
+.growth-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:18px; }
+.growth-empty { padding:5px 0; }
+.growth-milestones { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+.growth-milestones button { text-align:left; background:#f0f7f5; color:#143b38; border:1px solid #dae9e5; border-radius:12px; padding:18px 14px; }
+.growth-milestones strong { display:block; font-size:30px; letter-spacing:-1px; margin-bottom:7px; }
+.growth-milestones span { font-size:12px; line-height:1.5; display:block; }
+.growth-findings,.growth-connections { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; }
+.growth-findings article,.growth-connections article { border-bottom:1px solid #e2eaee; padding-bottom:12px; }
+.growth-findings h3 { margin:8px 0; }
+.growth-routines { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.growth-routines ol { padding-left:20px; }
+.growth-routines li { margin:0 0 12px; }
+.growth-stage-list details { border-top:1px solid #e4eaed; padding:16px 0; }
+.growth-stage-list summary { cursor:pointer; display:flex; gap:20px; font-size:14px; }
+.growth-stage-list summary span { color:#607481; }
+.growth-task-links { padding:0; list-style:none; }
+.growth-task-links li { padding:7px 0; border-top:1px solid #edf1f3; }
+.growth-task-links .text-btn { text-align:left; line-height:1.5; white-space:normal; }
+.growth-channel-list { display:grid; gap:20px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.growth-channel-list article { padding:16px; border:1px solid #e1e9ed; border-radius:12px; }
+.growth-budget { display:flex; flex-direction:column; gap:5px; margin-bottom:20px; color:#1b5148; }
+.growth-budget strong { font-size:38px; }
+.growth-budget span { font-size:12px; }
+.growth-funnel { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
+.growth-funnel article { background:#f1f6f8; border-radius:10px; padding:15px 10px; display:flex; flex-direction:column; gap:10px; }
+.growth-funnel strong { font-size:24px; }
+.growth-funnel span { font-size:10px; color:#637786; overflow-wrap:anywhere; }
+.growth-task-context { margin-top:10px; }
+.growth-copy { width:100%; padding:15px; line-height:1.6; }
+.growth-workspace .tag { white-space:normal; }
+@media(max-width:1100px) { .growth-routines { grid-template-columns:1fr; } .growth-funnel { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:800px) { .growth-hero,.growth-grid,.growth-findings,.growth-connections,.growth-channel-list { grid-template-columns:1fr; } .growth-hero { padding:24px; gap:20px; } .growth-focus { border-left:0; border-top:1px solid #ffffff26; padding:20px 0 0; } .growth-milestones { grid-template-columns:repeat(2,minmax(0,1fr)); } .growth-tabs { margin-left:-4px; margin-right:-4px; } .growth-tabs button { padding:10px; } .growth-stage-list summary { flex-direction:column; gap:6px; } }

@@ -3,6 +3,7 @@ let data,
   activePin = "",
   failedAttempts = 0,
   planTaskView = "all",
+  growthTab = "home",
   adminActionIndex = 0,
   adminState = {
     overviewNote: "",
@@ -105,7 +106,7 @@ const lifecycleTitle = (value) =>
     GROWTH: "Growth",
   })[value] || value.replaceAll("_", " ");
 const taskIsAI = (t) => t.category === "AI_TASK";
-const taskNeedsAdmin = (t) => t.category === "ADMIN_HELP";
+const taskNeedsAdmin = (t) => t.category === "ADMIN_HELP" || Boolean(data?.growthSystem?.approvals.some(p => p.status === "READY" && p.taskIds.includes(t.id)));
 const taskAvailable = (t) =>
   taskIsAI(t) &&
   ["IN PROGRESS", "NOT STARTED"].includes(taskStatus(t));
@@ -188,6 +189,9 @@ function instructionSteps(action) {
   return `<ol class="admin-steps">${steps.map((step) => `<li>${esc(step)}</li>`).join("")}</ol>`;
 }
 function taskAdminSteps(t) {
+  const packet = data?.growthSystem?.approvals.find(p => p.status === "READY" && p.taskIds.includes(t.id));
+  if (packet) return `<p>${esc(packet.trigger)}</p><ol class="admin-steps">${packet.adminSteps.map(step => `<li>${esc(step)}</li>`).join("")}</ol>`;
+  if (t.execution) return t.execution.release === "INTERNAL" ? "<p>None. AI completes this internal work.</p>" : "<p>None now. When the deliverable is ready, AI prepares the exact final decision or access packet; the admin does not produce the work.</p>";
   return instructionSteps(
     `Confirm you have the account, device, approval, or access needed for this task. ${t.title}. Record the result or evidence in the task note; changes save automatically.`,
   );
@@ -210,7 +214,7 @@ function taskDetail(id, currentNote = "", currentBlocker = "") {
   openDetail(
     `${t.id} · ${phase?.title || t.phaseId}`,
     t.title,
-    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${taskStatus(t) === "BLOCKED" ? item("Why blocked", esc(blocker)) : ""}${taskNeedsAdmin(t) ? item("Admin steps", taskAdminSteps(t)) : ""}${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
+    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${taskStatus(t) === "BLOCKED" ? item("Why blocked", esc(blocker)) : ""}${taskNeedsAdmin(t) ? item("Admin steps", taskAdminSteps(t)) : ""}${t.execution ? item("AI execution recipe", growthRecipe(t)) : ""}${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
   );
 }
 function overview() {
@@ -224,7 +228,7 @@ function overview() {
     nextTask = nextLifecycleTask(lifecycle);
   const lifecycleSummary = taskStatusSummary(lifecycleTasks);
   const owners = data.owners.filter((o) =>
-    ["OPEN", "BLOCKED"].includes(o.status),
+    ["OPEN", "BLOCKED"].includes(o.status) && (lifecycle !== "GROWTH" || /GR:/.test(o.blocks)),
   );
   adminActionIndex = owners.length
     ? Math.min(adminActionIndex, owners.length - 1)
@@ -239,15 +243,16 @@ function overview() {
       adminState.project?.headline ||
         "From first feedback to lasting subscriber growth.",
     ) +
-    `<div class="overview-top"><section class="panel admin-note"><div class="panel-head"><div><div class="eyebrow">SHARED PROJECT NOTE</div><h2>Overview note</h2></div><span id="note-status" class="save-status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><textarea id="admin-note" rows="5" maxlength="3000" placeholder="Add a note everyone using this dashboard can see…">${esc(adminState.overviewNote)}</textarea><div class="note-actions"><small>Changes save automatically for everyone who unlocks this dashboard.</small><div class="note-buttons"><button id="clear-note" class="text-btn">Clear</button></div></div></div></section><section class="panel summary-card" aria-label="Key project numbers"><div class="panel-head"><div><div class="eyebrow">PROJECT SNAPSHOT</div><h2>Key numbers</h2></div><button class="text-btn" data-go="growth">View details ↗</button></div><div class="summary-grid">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback === null ? "—" : feedback} <span>/ 10</span>`, feedback === null ? "Not yet measured" : "3 / 6 / 10 checkpoints")}${stat("Budget remaining", money(data.budget.remaining), `${money(data.budget.spent)} spent`)}${lifecycle === "GROWTH" ? stat("Growth tasks complete", `${lifecycleSummary.counts.complete} <span>/ ${lifecycleSummary.total}</span>`, "Post-launch register") : stat("Launch checks passed", `${passed} <span>/ 10</span>`, "Evidence reviewed")}</div></section></div>` +
+    `<div class="overview-top"><section class="panel admin-note"><div class="panel-head"><div><div class="eyebrow">SHARED PROJECT NOTE</div><h2>Overview note</h2></div><span id="note-status" class="save-status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><textarea id="admin-note" rows="5" maxlength="3000" placeholder="Add a note everyone using this dashboard can see…">${esc(adminState.overviewNote)}</textarea><div class="note-actions"><small>Changes save automatically for everyone who unlocks this dashboard.</small><div class="note-buttons"><button id="clear-note" class="text-btn">Clear</button></div></div></div></section><section class="panel summary-card" aria-label="Key project numbers"><div class="panel-head"><div><div class="eyebrow">PROJECT SNAPSHOT</div><h2>Key numbers</h2></div><button class="text-btn" data-go="growth">View details ↗</button></div><div class="summary-grid">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${lifecycle === "GROWTH" ? stat("Repeat export · 7 days", display(metric("Repeat export within 7 days").value), "Mature genuine cohorts only") : stat("Useful feedback", `${feedback === null ? "—" : feedback} <span>/ 10</span>`, feedback === null ? "Not yet measured" : "3 / 6 / 10 checkpoints")}${stat("Budget remaining", money(data.budget.remaining), `${money(data.budget.spent)} spent`)}${lifecycle === "GROWTH" ? stat("Growth tasks complete", `${lifecycleSummary.counts.complete} <span>/ ${lifecycleSummary.total}</span>`, "Post-launch register") : stat("Launch checks passed", `${passed} <span>/ 10</span>`, "Evidence reviewed")}</div></section></div>` +
     `<div class="work-lanes">` +
-    `<section class="panel work-lane ai-lane"><div class="lane-number">01</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">NEXT AI TASK · ${esc(lifecycleTitle(lifecycle).toUpperCase())}</div><h2>Tell Codex to implement this next</h2><p>The next active AI task is selected from the current lifecycle.</p></div><span class="tag pass">${lifecycleTasks.filter(taskAvailable).length} available</span></div><div class="task-list">${nextTask ? (() => { const phase = data.phases.find((p) => p.id === nextTask.phaseId); return `<div class="next-item"><span class="step-num">${esc(nextTask.id.replace("WB:", ""))}</span><p><strong>${esc(nextTask.title)}</strong><br><small>${esc(nextTask.phaseId)} · ${esc(phase?.title || "")}</small></p></div>`; })() : `<p class="empty">No active AI task is registered for ${esc(lifecycleTitle(lifecycle))}.</p>`}<div class="lane-actions"><button class="text-btn" data-plan-scope="ready">View AI tasks ↗</button></div></div></div></section>` +
+    `<section class="panel work-lane ai-lane"><div class="lane-number">01</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">NEXT AI TASK · ${esc(lifecycleTitle(lifecycle).toUpperCase())}</div><h2>Tell Codex to implement this next</h2><p>${lifecycle === "GROWTH" ? "Suggested preparation; Codex checks launch evidence, inputs and authorization before execution." : "The next active AI task is selected from the current lifecycle."}</p></div><span class="tag pass">${lifecycleTasks.filter(taskAvailable).length} ${lifecycle === "GROWTH" ? "unfinished recipes" : "available"}</span></div><div class="task-list">${nextTask ? (() => { const phase = data.phases.find((p) => p.id === nextTask.phaseId); return `<div class="next-item"><span class="step-num">${esc(nextTask.id.replace("WB:", ""))}</span><p><strong>${esc(nextTask.title)}</strong><br><small>${esc(nextTask.phaseId)} · ${esc(phase?.title || "")}</small></p></div>`; })() : `<p class="empty">No active AI task is registered for ${esc(lifecycleTitle(lifecycle))}.</p>`}<div class="lane-actions"><button class="text-btn" data-plan-scope="ready">View AI tasks ↗</button></div></div></div></section>` +
     `<section class="panel work-lane admin-lane"><div class="lane-number">02</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">ADMIN HELP NEEDED</div><h2>Work AI cannot complete alone</h2><p>One action is shown at a time. Use the arrows to move through the open Owner Actions.</p></div><span class="tag ${owners.some((o) => o.status === "BLOCKED") ? "blocked" : "warn"}">${owners.length} actions</span></div><div class="panel-body">${adminTaskView}<div class="lane-actions"><button class="text-btn" data-plan-scope="admin">View tasks needing admin help ↗</button></div></div></div></section>` +
     `</div>`;
 }
-function plan() {
+function plan(growthLibrary = false) {
+  if (activeLifecycle() === "GROWTH" && !growthLibrary) return growth();
   const feedback = data.registeredFeedback,
-    current = activeLifecycle(),
+    current = growthLibrary ? "GROWTH" : activeLifecycle(),
     scope = data.tasks.filter((t) => t.lifecycle === current),
     taskSummary = taskStatusSummary(scope),
     phaseIds = new Set(scope.map((t) => t.phaseId)),
@@ -265,11 +270,13 @@ function plan() {
       : "";
   $("#main").innerHTML =
     head(
-      "Work plan",
+      growthLibrary ? "Growth · AI task library" : "Work plan",
       current === "GROWTH"
         ? "Only post-launch Growth tasks are shown. Pre-launch work remains separate."
         : `Only tasks and readiness checks for ${lifecycleTitle(current)} are shown.`,
+      growthLibrary ? '<span class="tag neutral">Post-launch strategy</span>' : "",
     ) +
+    (growthLibrary ? growthNavigation() : "") +
     taskStatusPanel +
     `<div class="task-toolbar section-gap"><div><h2>Tasks</h2><p>Green is an AI task. Yellow needs admin help.</p></div><div class="toolbar"><select id="task-scope" aria-label="Choose task group"><option value="all" ${planTaskView === "all" ? "selected" : ""}>All tasks</option><option value="ready" ${planTaskView === "ready" ? "selected" : ""}>AI tasks</option><option value="admin" ${planTaskView === "admin" ? "selected" : ""}>Admin help needed</option></select><input id="task-search" type="search" placeholder="Search tasks…" aria-label="Search tasks"><select id="task-filter" aria-label="Filter tasks by status"><option value="ALL">All statuses</option>${["BLOCKED", "IN PROGRESS", "NOT STARTED", "COMPLETE"].map((s) => `<option value="${s}">${label(s)}</option>`).join("")}</select></div></div><div class="status-count" id="task-count"></div><section class="task-board" id="tasks"></section>${feedbackPanel}<section class="section-gap"><div class="page-head compact-head"><div><div class="eyebrow">${esc(gateGroup.toUpperCase())} READINESS</div><h2>Evidence before the next lifecycle step</h2><p>Open a check to review its meaning, evidence, owner and required action.</p></div></div><div class="callout">${gateGroup === "Launch" ? "Official launch requires every launch check plus the final team decision." : "Creator outreach waits for social proof and recruitment readiness."}</div><div id="gate-count" class="status-count"></div><div id="gates" class="gate-list"></div></section>`;
   const render = () => {
@@ -304,7 +311,7 @@ function plan() {
             source = w.sourceUrl
               ? `<a href="${esc(w.sourceUrl)}" target="_blank" rel="noopener">Open source ↗</a>`
               : "—";
-          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><header class="task-card-header"><div class="task-card-identity"><div class="task-card-kicker"><span>${esc(t.id)}</span><span>${esc(phase?.title || t.phaseId)}</span><span class="task-kind">${category}</span></div><h3>${esc(t.title)}</h3></div><div class="task-card-controls"><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><span class="task-save-status">${note || blocker ? "Saved" : "Auto-save on"}</span></div></header><div class="task-card-body"><section class="task-work"><div class="task-brief"><div><small>SUCCESS LOOKS LIKE</small><p>${esc(t.success)}</p></div></div><label class="blocked-reason task-row-blocker" ${status === "BLOCKED" ? "" : "hidden"}><span>WHY BLOCKED</span><textarea data-task-row-blocker="${esc(t.id)}" rows="2" maxlength="1000" placeholder="Describe why this task is blocked…">${esc(blocker)}</textarea></label>${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</section><section class="task-row-fields"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="5" maxlength="1000" placeholder="Add a short update or evidence…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">Open full task details →</button></section></div><details class="task-baseline"><summary>Guidance, context and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
+          return `<article class="task-row ${kind}" data-task-row="${esc(t.id)}"><header class="task-card-header"><div class="task-card-identity"><div class="task-card-kicker"><span>${esc(t.id)}</span><span>${esc(phase?.title || t.phaseId)}</span><span class="task-kind">${category}</span></div><h3>${esc(t.title)}</h3></div><div class="task-card-controls"><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><span class="task-save-status">${note || blocker ? "Saved" : "Auto-save on"}</span></div></header><div class="task-card-body"><section class="task-work"><div class="task-brief"><div><small>SUCCESS LOOKS LIKE</small><p>${esc(t.success)}</p></div></div><label class="blocked-reason task-row-blocker" ${status === "BLOCKED" ? "" : "hidden"}><span>WHY BLOCKED</span><textarea data-task-row-blocker="${esc(t.id)}" rows="2" maxlength="1000" placeholder="Describe why this task is blocked…">${esc(blocker)}</textarea></label>${t.execution ? `<div class="growth-task-context"><small>WHEN AI ACTS</small><p>${esc(t.execution.trigger)}</p><small>AI DELIVERABLE</small><p>${esc(t.execution.output)}</p><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</section><section class="task-row-fields"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="5" maxlength="1000" placeholder="Add a short update or evidence…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">Open full task details →</button></section></div><details class="task-baseline"><summary>Guidance, context and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
         },
       activeRows = rows.filter((t) => taskStatus(t) !== "COMPLETE"),
       completedRows = rows.filter((t) => taskStatus(t) === "COMPLETE"),
@@ -344,40 +351,63 @@ function showGates(group, openId = "") {
     })
     .join("");
 }
-function growth() {
-  const b = data.budget;
-  const names = [
-    "Total active subscribers",
-    "MRR",
-    "Activated users",
-    "Successful exports",
-  ];
-  $("#main").innerHTML =
-    head(
-      "Growth that means something.",
-      "Subscribers first. Unknown measurements stay unknown.",
-    ) +
-    `<section class="stats">${names
-      .map((name) => {
-        const m = metric(name);
-        return stat(
-          name,
-          display(m.value),
-          m.value === "UNKNOWN" ? "Not yet verified" : esc(m.asOf),
-        );
-      })
-      .join(
-        "",
-      )}</section><section class="panel"><div class="panel-head"><h2>Make the $${b.total} count</h2><small>One total project budget</small></div><div class="panel-body budget-layout"><div class="donut" style="--used:${Math.min(100, b.total ? (b.spent / b.total) * 100 : 0)}%"><div class="donut-inner"><strong>${money(b.remaining)}</strong><small>remaining unspent</small></div></div><div class="allocations"><p class="subtle">Planned allocations · each expense needs approval</p>${b.allocations
-      .filter((a) => a.amount > 0)
-      .map(
-        (a) =>
-          `<div class="allocation"><span>${esc(a.label)}</span><strong>${money(a.amount)}</strong></div>`,
-      )
-      .join(
-        "",
-      )}<p class="subtle section-gap">${money(b.spent)} spent · ${money(b.committed)} committed · ${money(b.proposed)} in expense proposals</p></div></div></section><section class="panel section-gap"><div class="panel-head"><h2>Measurement register</h2><button class="text-btn" data-doc="03_ANALYTICS/METRICS.md">Read evidence ↗</button></div><div class="table-wrap"><table><thead><tr><th>Metric</th><th>Recorded value</th><th>As of / period</th><th>Source</th></tr></thead><tbody>${data.metrics.map((m) => `<tr><td>${esc(m.label)}</td><td>${display(m.value)}</td><td>${m.asOf === "UNKNOWN" ? "Not recorded" : esc(m.asOf)}</td><td>${esc(m.source)}</td></tr>`).join("")}</tbody></table></div></section><p class="subtle section-gap">A single snapshot cannot establish a trend. Time-series charts can follow when dated observations exist.</p>`;
+function growthNavigation() {
+  return `<nav class="growth-tabs" aria-label="Growth sections">${[["home","Command center"],["rhythm","Daily & weekly"],["strategy","Strategy & phases"],["tasks","AI task library"],["evidence","Evidence & budget"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${growthTab === id ? "selected" : ""}" aria-current="${growthTab === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
 }
+function growthRecipe(t) {
+  const r = t.execution;
+  if (!r) return "";
+  return `<p><strong>When:</strong> ${esc(r.trigger)}</p><p><strong>Read first:</strong> ${r.inputs.map(path => `<button class="text-btn" data-doc="${esc(path)}">${esc(path.split("/").pop())}</button>`).join(" · ")}</p><ol>${r.steps.map(step => `<li>${esc(step)}</li>`).join("")}</ol><p><strong>Produce:</strong> ${esc(r.output)}</p><p><strong>Record in:</strong> ${esc(r.recordIn)}</p><p><strong>Release boundary:</strong> ${esc(r.release === "INTERNAL" ? "AI can complete internal work under existing authority." : "AI prepares and verifies the whole deliverable. The final public, message, product or financial action requires its applicable existing authorization.")}</p><p><strong>Admin steps:</strong></p>${taskAdminSteps(t)}<p><strong>Stop:</strong> ${esc(r.stop)}</p><p><strong>Afterward:</strong> ${esc(r.after)}</p><button class="quiet" data-growth-brief="${esc(t.id)}">Copy task brief for Codex</button>`;
+}
+function growthBrief(id) {
+  const t = data.tasks.find(t => t.id === id);
+  const r = data.growthSystem?.routines.find(r => r.id === id);
+  const taskText = t?.execution ? `${t.id}: ${t.title}. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
+  return `Work only in the Reaction Creator post-launch Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. ${taskText} Check the authoritative launch decision; before GO only prepare explicitly requested safe internal work. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
+}
+function growthPanel(title, body, extra = "") {
+  return `<section class="panel growth-panel"><div class="panel-head"><h2>${title}</h2>${extra}</div><div class="panel-body">${body}</div></section>`;
+}
+function growthScorecard() {
+  return `<section class="stats growth-stats">${[["Total active subscribers","Paying subscribers"],["MRR","Monthly recurring revenue"],["Activated users","First successful export"],["Repeat export within 7 days","Repeat export · 7 days"]].map(([key,title]) => { const m = metric(key); return stat(title, display(m.value), `${m.value === "UNKNOWN" ? "Unknown · no verified cohort" : esc(m.asOf)}<br><span class="metric-source">${esc(m.source)}</span>`); }).join("")}</section>`;
+}
+function growth() {
+  const g = data.growthSystem;
+  if (!g) { $("#main").innerHTML = head("Growth", "Refresh the project snapshot to load Growth recipes."); return; }
+  if (growthTab === "tasks") return plan(true);
+  const tasks = data.tasks.filter(t => t.lifecycle === "GROWTH");
+  const launch = data.growthLaunchAuthorized === true;
+  const pending = g.approvals.filter(p => p.status === "READY");
+  const next = tasks.find(t => t.id === g.focus.nextTask && taskStatus(t) !== "COMPLETE") || tasks.find(taskAvailable);
+  const docButton = (path, title) => `<button class="text-btn" data-doc="${esc(path)}">${esc(title)} ↗</button>`;
+  const receipts = g.runs.length ? `<ul>${g.runs.slice(-5).reverse().map(r => `<li>${esc(r.taskId)} · ${esc(r.periodKey)} · ${esc(r.status)}<br>${esc(r.evidence || r.output || "No output recorded")}</li>`).join("")}</ul>` : '<p class="subtle">No post-launch execution receipts recorded. Preparing this system does not count as a campaign run.</p>';
+  let body = "";
+  if (growthTab === "home") {
+    const count = Number(metric("Total active subscribers").value);
+    const target = g.milestones.find(m => !Number.isFinite(count) || m.target > count)?.target;
+    const milestoneLabel = target ? `Next milestone · ${target} paying subscribers` : '100-subscriber path reached · review next target';
+    body = `<section class="growth-hero"><div><div class="eyebrow">${esc(milestoneLabel.toUpperCase())}</div><h2>Build demand.<br>Deliver value. Earn repeat use.</h2><p>${esc(g.focus.hypothesis)}</p><div class="growth-flags"><span>${launch ? "Launch decision recorded" : "Planning mode · live Growth has not begun"}</span><span>${esc(g.scheduler.status === "NOT_SCHEDULED" ? "Automation not scheduled" : g.scheduler.status)}</span></div></div><div class="growth-focus"><small>THE CURRENT CONSTRAINT</small><p>${esc(g.focus.constraint)}</p><small>AI OWNS THE HEAVY WORK</small><p>${tasks.length} task recipes · 8 workstreams · 3 recurring routines</p><button class="quiet" data-growth-tab="rhythm">Open the operating rhythm →</button></div></section>` + growthScorecard();
+    body += `<div class="growth-grid">${growthPanel("Next best AI action", next ? `<span class="tag progress">${launch ? "Suggested next action" : "Preparation brief"}</span><h3>${esc(next.title)}</h3><p>${esc(next.execution.output)}</p><p class="subtle">${esc(next.execution.trigger)}</p><div class="growth-actions"><button class="quiet" data-task-detail="${esc(next.id)}">Open execution recipe</button><button class="text-btn" data-growth-brief="${esc(next.id)}">Copy Codex brief</button></div><p class="subtle">A suggestion, not a verified-ready job. Codex checks current inputs and receipts before starting.</p>` : '<p>No unfinished Growth task is registered.</p>')}${growthPanel("Admin decisions", pending.length ? pending.map(p => `<article><h3>${esc(p.decision)}</h3><p>${esc(p.trigger)}</p>${docButton(p.deliverable,"Review prepared packet")}<h4>Admin steps</h4><ol>${p.adminSteps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol></article>`).join("") : '<div class="growth-empty"><span class="tag pass">None needed now</span><p>AI prepares the research, assets, implementation and evidence. Only a ready final decision or missing access step belongs here.</p><small>Public actions and spending retain their existing approval boundaries.</small></div>')}</div>`;
+    body += growthPanel("The path to 100 paying subscribers", `<div class="growth-milestones">${g.milestones.map(m => `<button data-growth-milestone="${m.target}"><strong>${m.target}</strong><span>${esc(m.focus)}</span></button>`).join("")}</div><p class="subtle">Advance on real subscriber evidence. Reassess retention and the current bottleneck at every milestone.</p>`);
+    body += `<div class="growth-grid">${growthPanel("Content & creator pipeline", `<p>${esc(g.workstreams.find(w=>w.id==='G-03').flow)}</p><p class="subtle">${g.campaigns.length ? `${g.campaigns.length} Growth campaign records` : "No live post-launch campaigns recorded. Content, contacts and results remain in their source logs."}</p>${docButton("07_CONTENT/CONTENT_RESULTS.csv","Content results")}${docButton("06_OUTREACH/OUTREACH_LOG.csv","Relationship results")}<p><button class="text-btn" data-growth-tab="strategy">Choose the next strategy →</button></p>`)}${growthPanel("Execution health", `<p><strong>Scheduler:</strong> ${esc(g.scheduler.status === "NOT_SCHEDULED" ? "Not scheduled" : g.scheduler.status)}</p><p><strong>Last run:</strong> ${esc(g.scheduler.lastRun || "None recorded")}</p><p><strong>Next run:</strong> ${esc(g.scheduler.nextRun || "Not scheduled")}</p>${receipts}<small>The dashboard prepares briefs; copying one does not start a worker.</small>`)}</div>`;
+    body += growthPanel("What changed & what we learned", `<div class="growth-findings">${g.findings.map(f=>`<article><small>${esc(f.kind)}</small><h3>${esc(f.title)}</h3><p>${esc(f.detail)}</p>${docButton(f.source,"Read the record")}</article>`).join("")}</div>`);
+  } else if (growthTab === "rhythm") {
+    body = `<div class="callout">${esc(g.scheduler.note)} Copy a brief to give Codex the complete routine. Each run checks its period receipt before repeating work.</div><div class="growth-routines">${g.routines.map(r => growthPanel(esc(r.title), `<p class="subtle">${esc(r.when)}</p><ol>${r.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol><p><strong>Output:</strong> ${esc(r.output)}</p><div class="growth-actions"><button class="quiet" data-growth-brief="${esc(r.id)}">Copy ${esc(r.id)} brief</button>${docButton("01_STRATEGY/GROWTH_EXECUTION.md","Run procedure")}</div>`)).join("")}</div>`;
+    body += growthPanel("When the evidence changes", `<div class="growth-grid"><div><h3>Continue growth</h3><p>${esc(g.focus.workInProgress)}</p><p>Prioritize an urgent product or spending issue, then due commitments, then the best-supported subscriber or activation bottleneck.</p></div><div><h3>Stop, learn, improve</h3><p>Review repeat exports after 7 full days and paid conversion after 14. Incomplete windows are pending. Record the reason to continue, revise or stop before starting the next test.</p></div></div>${docButton("08_EXPERIMENTS/LEARNINGS.md","Durable lessons")}${docButton("01_STRATEGY/GROWTH_EXECUTION.md","Retry and duplicate prevention")}`);
+  } else if (growthTab === "strategy") {
+    body = growthPanel("Milestones determine emphasis; workstreams run together", `<p>These are planning hypotheses, not deadlines or proof of product-market fit. Change emphasis when real customer behavior contradicts the plan.</p><div class="growth-stage-list">${g.milestones.map(m=>`<details><summary><strong>${m.target} paying subscribers</strong><span>${esc(m.focus)}</span></summary><p>${esc(m.actions)}</p><p><strong>Evidence to expand:</strong> ${esc(m.evidence)}</p><p><strong>Next:</strong> ${esc(m.next)}</p></details>`).join("")}</div>`);
+    body += `<div class="growth-grid">${g.workstreams.map(w=>growthPanel(`${esc(w.id)} · ${esc(w.title)}`, `<p>${esc(w.outcome)}</p><p class="subtle">${esc(w.flow)}</p><ul class="growth-task-links">${tasks.filter(t=>t.phaseId===w.id).map(t=>`<li><button class="text-btn" data-task-detail="${esc(t.id)}">${esc(t.id)} · ${esc(t.title)}</button></li>`).join("")}</ul>${docButton(w.record,"Execution record")}`)).join("")}</div>`;
+    body += growthPanel("Channel priorities", `<div class="growth-channel-list">${g.channels.map(c=>`<article><span class="tag neutral">${esc(c.priority)}</span><h3>${esc(c.name)}</h3><p>${esc(c.strategy)}</p><small>MEASURE WHAT MATTERS</small><p>${esc(c.measure)}</p>${docButton(c.record,"Evidence log")}</article>`).join("")}</div>`);
+  } else {
+    const b = data.budget;
+    body = growthScorecard() + `<div class="growth-grid">${growthPanel("One budget. Evidence before scale.", `<div class="growth-budget"><strong>${money(b.remaining)}</strong><span>remaining unspent / ${money(b.total)} total cap</span></div><p>${money(b.spent)} spent · ${money(b.committed)} committed · ${money(b.proposed)} proposed</p>${b.allocations.filter(a=>a.amount>0).map(a=>`<div class="allocation"><span>${esc(a.label)}</span><strong>${money(a.amount)}</strong></div>`).join("")}<p class="subtle">Planning envelopes are not spending approval. CAC remains unknown without attributable paying customers and complete costs.</p>${docButton("09_BUDGET/BUDGET.md","Budget rules")}`)}${growthPanel("Experiment review", `<p>${g.experiments.length ? `${g.experiments.length} Growth experiments registered` : "No post-launch experiment has started."}</p><p>Before a test: one hypothesis, audience, changed variable, denominator, review date, cost and stop rule. Afterward: continue, revise or stop.</p><p class="subtle">${g.cohorts.length ? `${g.cohorts.length} Growth cohort summaries recorded; read their definitions and observation windows in the metric evidence.` : "No mature Growth cohorts are recorded yet."} Do not turn missing data into a zero conversion rate.</p>${docButton("08_EXPERIMENTS/EXPERIMENT_BACKLOG.md","Proposed experiments")}${docButton("08_EXPERIMENTS/EXPERIMENT_LOG.md","Executed experiments")}`)}</div>`;
+    body += growthPanel("Funnel definitions & evidence", `<p class="subtle">These stages cannot be combined into a person-level funnel until comparable genuine-user cohorts and source attribution exist.</p><div class="growth-funnel">${[["Store visitors","Store visitors"],["Install button clicks","Store install clicks"],["Completed acquisitions","Completed acquisitions"],["First export","Activated users"],["Repeat export · 7 days","Repeat export within 7 days"],["Paying subscribers","Total active subscribers"]].map(([title,key])=>{const m=metric(key);return `<article><small>${esc(title)}</small><strong>${display(m.value)}</strong><span>${esc(m.asOf)}</span></article>`}).join("")}</div><p>Google Play listing clicks/CTR show intent. Completed acquisitions use the relevant acquisition report. Subscription totals exclude trials, tests and free promotional access.</p>${docButton("03_ANALYTICS/METRICS.md","Metric evidence and definitions")}${docButton("02_RESEARCH/GROWTH_DASHBOARD_RESEARCH.md","Research sources")}`);
+    body += growthPanel("Automation & data connections", `<div class="growth-connections">${g.integrations.map(i=>`<article><h3>${esc(i.name)}</h3><span class="tag neutral">${esc(i.status)}</span><p>${esc(i.route)}</p>${docButton(i.source,"Source / next step")}</article>`).join("")}</div><p class="subtle">Access entries are dated project records, not a live connection check. No service was purchased or activated for this redesign.</p>`);
+    body += growthPanel("Recent Growth execution receipts", receipts);
+  }
+  $("#main").innerHTML = head("Growth", "An AI-owned operating system for acquiring, activating and retaining paying creators.", '<span class="tag neutral">Post-launch strategy</span>') + growthNavigation() + `<div class="growth-workspace">${body}</div><p class="subtle section-gap">Growth strategy updated ${esc(g.updatedAt)} · Snapshot ${esc(data.generatedAt?.slice(0,10))} · Metrics retain their own observation dates.</p>`;
+}
+
 function baselineCard(record, titleKey) {
   const title =
       record[titleKey] ||
@@ -842,11 +872,11 @@ async function autoSaveTask(row) {
     await saveSharedTask(id, status, note, blocker);
     saveStatus.textContent = "Saved";
     if (
-      view === "plan" &&
+      (view === "plan" || (view === "growth" && growthTab === "tasks")) &&
       (previousStatus === "COMPLETE" || status === "COMPLETE") &&
       previousStatus !== status
     )
-      plan();
+      plan(growthTab === "tasks" && view === "growth");
   } catch (error) {
     saveStatus.textContent = error.message;
   }
@@ -879,6 +909,7 @@ document.addEventListener("click", async (e) => {
   if (b.dataset.go) location.hash = b.dataset.go;
   if (b.dataset.planScope) {
     planTaskView = b.dataset.planScope;
+    if (activeLifecycle() === "GROWTH") growthTab = "tasks";
     if (view === "plan") plan();
     else location.hash = "plan";
   }
@@ -1000,3 +1031,19 @@ $("#detail").addEventListener("click", (e) => {
 });
 window.addEventListener("hashchange", navigate);
 $("#pin").focus();
+
+document.addEventListener("click", async (event) => {
+  const tab = event.target.closest("[data-growth-tab]");
+  if (tab) { growthTab = tab.dataset.growthTab; growth(); return; }
+  const milestone = event.target.closest("[data-growth-milestone]");
+  if (milestone) {
+    const m = data.growthSystem.milestones.find(m => String(m.target) === milestone.dataset.growthMilestone);
+    if (m) openDetail("GROWTH MILESTONE", `${m.target} paying subscribers · ${m.focus}`, `<p>${esc(m.actions)}</p><h3>Evidence to expand</h3><p>${esc(m.evidence)}</p><h3>Then</h3><p>${esc(m.next)}</p>`);
+  }
+  const brief = event.target.closest("[data-growth-brief]");
+  if (brief) {
+    const text = growthBrief(brief.dataset.growthBrief);
+    try { await navigator.clipboard.writeText(text); brief.textContent = "Copied · paste into Codex"; }
+    catch { openDetail("GROWTH EXECUTION BRIEF", "Copy this brief into Codex", `<textarea class="growth-copy" rows="12" readonly>${esc(text)}</textarea>`); }
+  }
+});
