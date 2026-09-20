@@ -1125,37 +1125,6 @@ dialog::backdrop {
     }
   }
 }
-.overview-top {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-  margin-bottom: 24px;
-  align-items: stretch;
-}
-.overview-top > .panel {
-  height: 100%;
-}
-.admin-note {
-  display: flex;
-  flex-direction: column;
-}
-.admin-note .panel-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-.admin-note textarea {
-  width: 100%;
-  min-height: 132px;
-  flex: 1;
-  resize: vertical;
-  border: 1px solid #cdd7e0;
-  border-radius: 9px;
-  padding: 14px;
-  line-height: 1.55;
-  color: var(--ink);
-  background: #fbfcfd;
-}
 .note-actions {
   display: flex;
   justify-content: space-between;
@@ -1177,6 +1146,7 @@ dialog::backdrop {
 .summary-card {
   display: flex;
   flex-direction: column;
+  margin-bottom: 24px;
 }
 .summary-grid {
   display: grid;
@@ -2082,9 +2052,6 @@ dialog::backdrop {
   font-weight: 650;
 }
 @media (max-width: 900px) {
-  .overview-top {
-    grid-template-columns: 1fr;
-  }
   .ai-lane .task-list {
     grid-template-columns: 1fr;
   }
@@ -3169,13 +3136,13 @@ nav a.active {
 .prelaunch-note-preview { color: #65728b; font-size: 13px; line-height: 1.6; margin: 12px 0 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; }
 .prelaunch-task-footer small { color: #65728b; }
 .prelaunch-task-footer button { flex-shrink: 0; }
-.prelaunch-notepad { margin-top: 24px; }
-.prelaunch-notepad .panel-head { align-items: flex-start; }
-.prelaunch-notepad .panel-head p { font-size: 13px; color: #65728b; margin: 8px 0 0; max-width: 620px; }
-.prelaunch-notepad label, .prelaunch-editor label { display: grid; gap: 8px; font-weight: 600; font-size: 14px; color: #294353; }
-.prelaunch-notepad textarea, .prelaunch-editor textarea, .prelaunch-editor select { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #cbd6e2; border-radius: 8px; padding: 12px; background: #fff; color: #203748; font: inherit; line-height: 1.6; }
-.prelaunch-notepad textarea { margin: 8px 0; resize: vertical; }
-.prelaunch-notepad small { color: #65728b; }
+.project-notepad { margin-top: 24px; }
+.project-notepad .panel-head { align-items: flex-start; }
+.project-notepad .panel-head p { font-size: 13px; color: #65728b; margin: 8px 0 0; max-width: 620px; }
+.project-notepad label, .prelaunch-editor label { display: grid; gap: 8px; font-weight: 600; font-size: 14px; color: #294353; }
+.project-notepad textarea, .prelaunch-editor textarea, .prelaunch-editor select { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid #cbd6e2; border-radius: 8px; padding: 12px; background: #fff; color: #203748; font: inherit; line-height: 1.6; }
+.project-notepad textarea { margin: 8px 0; resize: vertical; }
+.project-notepad small { color: #65728b; }
 .prelaunch-editor { display: grid; gap: 16px; }
 .prelaunch-editor textarea { resize: vertical; }
 .prelaunch-editor select { max-width: 310px; }
@@ -3188,7 +3155,7 @@ nav a.active {
 @media(max-width:600px) {
   .prelaunch-task-heading, .prelaunch-task-footer, .prelaunch-editor-actions, .prelaunch-note-help { align-items: flex-start; flex-direction: column; gap: 10px; }
   .prelaunch-task-card { padding: 16px; }
-  .prelaunch-notepad .panel-head { flex-direction: column; }
+  .project-notepad .panel-head { flex-direction: column; }
 }
 .prelaunch-action-links { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
 .prelaunch-editor-actions { position: sticky; bottom: 0; background: #fff; z-index: 2; box-shadow: 0 -8px 16px #fff; }
