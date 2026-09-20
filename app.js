@@ -102,8 +102,6 @@ const activeLifecycle = () => adminState.project?.stage || "PRE_LAUNCH";
 const lifecycleTitle = (value) =>
   ({
     PRE_LAUNCH: "Pre-launch",
-    LAUNCH_READY: "Launch ready",
-    LAUNCHED: "Launched",
     GROWTH: "Growth",
   })[value] || value.replaceAll("_", " ");
 const taskIsAI = (t) => t.category === "AI_TASK";
@@ -224,6 +222,7 @@ function overview() {
   const lifecycle = activeLifecycle(),
     lifecycleTasks = data.tasks.filter((t) => t.lifecycle === lifecycle),
     nextTask = nextLifecycleTask(lifecycle);
+  const lifecycleSummary = taskStatusSummary(lifecycleTasks);
   const owners = data.owners.filter((o) =>
     ["OPEN", "BLOCKED"].includes(o.status),
   );
@@ -240,7 +239,7 @@ function overview() {
       adminState.project?.headline ||
         "From first feedback to lasting subscriber growth.",
     ) +
-    `<div class="overview-top"><section class="panel admin-note"><div class="panel-head"><div><div class="eyebrow">SHARED PROJECT NOTE</div><h2>Overview note</h2></div><span id="note-status" class="save-status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><textarea id="admin-note" rows="5" maxlength="3000" placeholder="Add a note everyone using this dashboard can see…">${esc(adminState.overviewNote)}</textarea><div class="note-actions"><small>Changes save automatically for everyone who unlocks this dashboard.</small><div class="note-buttons"><button id="clear-note" class="text-btn">Clear</button></div></div></div></section><section class="panel summary-card" aria-label="Key project numbers"><div class="panel-head"><div><div class="eyebrow">PROJECT SNAPSHOT</div><h2>Key numbers</h2></div><button class="text-btn" data-go="growth">View details ↗</button></div><div class="summary-grid">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback === null ? "—" : feedback} <span>/ 10</span>`, feedback === null ? "Not yet measured" : "3 / 6 / 10 checkpoints")}${stat("Budget remaining", money(data.budget.remaining), `${money(data.budget.spent)} spent`)}${stat("Launch checks passed", `${passed} <span>/ 10</span>`, "Evidence reviewed")}</div></section></div>` +
+    `<div class="overview-top"><section class="panel admin-note"><div class="panel-head"><div><div class="eyebrow">SHARED PROJECT NOTE</div><h2>Overview note</h2></div><span id="note-status" class="save-status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><textarea id="admin-note" rows="5" maxlength="3000" placeholder="Add a note everyone using this dashboard can see…">${esc(adminState.overviewNote)}</textarea><div class="note-actions"><small>Changes save automatically for everyone who unlocks this dashboard.</small><div class="note-buttons"><button id="clear-note" class="text-btn">Clear</button></div></div></div></section><section class="panel summary-card" aria-label="Key project numbers"><div class="panel-head"><div><div class="eyebrow">PROJECT SNAPSHOT</div><h2>Key numbers</h2></div><button class="text-btn" data-go="growth">View details ↗</button></div><div class="summary-grid">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback === null ? "—" : feedback} <span>/ 10</span>`, feedback === null ? "Not yet measured" : "3 / 6 / 10 checkpoints")}${stat("Budget remaining", money(data.budget.remaining), `${money(data.budget.spent)} spent`)}${lifecycle === "GROWTH" ? stat("Growth tasks complete", `${lifecycleSummary.counts.complete} <span>/ ${lifecycleSummary.total}</span>`, "Post-launch register") : stat("Launch checks passed", `${passed} <span>/ 10</span>`, "Evidence reviewed")}</div></section></div>` +
     `<div class="work-lanes">` +
     `<section class="panel work-lane ai-lane"><div class="lane-number">01</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">NEXT AI TASK · ${esc(lifecycleTitle(lifecycle).toUpperCase())}</div><h2>Tell Codex to implement this next</h2><p>The next active AI task is selected from the current lifecycle.</p></div><span class="tag pass">${lifecycleTasks.filter(taskAvailable).length} available</span></div><div class="task-list">${nextTask ? (() => { const phase = data.phases.find((p) => p.id === nextTask.phaseId); return `<div class="next-item"><span class="step-num">${esc(nextTask.id.replace("WB:", ""))}</span><p><strong>${esc(nextTask.title)}</strong><br><small>${esc(nextTask.phaseId)} · ${esc(phase?.title || "")}</small></p></div>`; })() : `<p class="empty">No active AI task is registered for ${esc(lifecycleTitle(lifecycle))}.</p>`}<div class="lane-actions"><button class="text-btn" data-plan-scope="ready">View AI tasks ↗</button></div></div></div></section>` +
     `<section class="panel work-lane admin-lane"><div class="lane-number">02</div><div class="lane-content"><div class="panel-head"><div><div class="eyebrow">ADMIN HELP NEEDED</div><h2>Work AI cannot complete alone</h2><p>One action is shown at a time. Use the arrows to move through the open Owner Actions.</p></div><span class="tag ${owners.some((o) => o.status === "BLOCKED") ? "blocked" : "warn"}">${owners.length} actions</span></div><div class="panel-body">${adminTaskView}<div class="lane-actions"><button class="text-btn" data-plan-scope="admin">View tasks needing admin help ↗</button></div></div></div></section>` +
@@ -253,17 +252,23 @@ function plan() {
     taskSummary = taskStatusSummary(scope),
     phaseIds = new Set(scope.map((t) => t.phaseId)),
     phases = data.phases.filter((p) => phaseIds.has(p.id)),
-    gateGroup = current === "LAUNCH_READY" ? "Launch" : "Social proof";
-  const phasePath = `<div class="task-status-phase-path"><div class="task-status-phase-head"><div><div class="eyebrow">LAUNCH PATH</div><h3>${current === "PRE_LAUNCH" ? "The path to launch readiness" : "Final launch decision"}</h3></div></div><div class="phase-path">${phases.map((p) => `<button data-phase="${esc(p.id)}" class="${p.status === "IN PROGRESS" ? "current" : p.status === "BLOCKED" ? "blocked" : ""}" aria-label="Open ${esc(p.title)} details"><div class="track"></div><small>${esc(p.id)}</small><span class="phase-path-title" title="${esc(p.title)}">${esc(p.title)}</span><span class="phase-state">${taskCountLabel(scope.filter((t) => t.phaseId === p.id).length)} · ${esc(label(p.status))}</span></button>`).join("")}</div></div>`;
+    gateGroup = current === "PRE_LAUNCH" ? "Social proof" : "";
+  const phasePath = `<div class="task-status-phase-path"><div class="task-status-phase-head"><div><div class="eyebrow">${current === "PRE_LAUNCH" ? "PRE-LAUNCH PATH" : "GROWTH PATH"}</div><h3>${current === "PRE_LAUNCH" ? "The path to launch readiness" : "The post-launch growth operating loop"}</h3></div></div><div class="phase-path">${phases.map((p) => `<button data-phase="${esc(p.id)}" class="${p.status === "IN PROGRESS" ? "current" : p.status === "BLOCKED" ? "blocked" : ""}" aria-label="Open ${esc(p.title)} details"><div class="track"></div><small>${esc(p.id)}</small><span class="phase-path-title" title="${esc(p.title)}">${esc(p.title)}</span><span class="phase-state">${taskCountLabel(scope.filter((t) => t.phaseId === p.id).length)} · ${esc(label(p.status))}</span></button>`).join("")}</div></div>`;
   const taskStatusPanel = `<section class="panel task-status-panel" aria-labelledby="task-status-title"><div class="panel-head"><div><div class="eyebrow">TASK STATUS</div><h2 id="task-status-title">How the work is moving</h2></div><small>${esc(lifecycleTitle(current))} · ${taskCountLabel(taskSummary.total)}</small></div><div class="task-status-layout"><div class="task-donut" role="img" aria-label="${taskSummary.percentages.complete}% complete, ${taskSummary.remainingPercent}% left, across ${taskSummary.total} tasks" style="--complete:${taskSummary.percentages.complete}%;--progress:${taskSummary.percentages.inProgress}%;--waiting:${taskSummary.percentages.waiting}%;--blocked:${taskSummary.percentages.blocked}%;"><div class="task-donut-center"><strong>${taskSummary.total ? `${taskSummary.percentages.complete}%` : "—"}</strong><span>complete</span><small>${taskSummary.total ? `${taskSummary.remainingPercent}% left` : "No tasks"}</small></div></div><div class="task-status-copy"><div class="task-status-legend"><div class="task-status-item"><i class="status-dot complete"></i><span><strong>${taskCountLabel(taskSummary.counts.complete)}</strong><small>Completed · ${taskSummary.percentages.complete}%</small></span></div><div class="task-status-item"><i class="status-dot progress"></i><span><strong>${taskCountLabel(taskSummary.counts.inProgress)}</strong><small>In progress · ${taskSummary.percentages.inProgress}%</small></span></div><div class="task-status-item"><i class="status-dot waiting"></i><span><strong>${taskCountLabel(taskSummary.counts.waiting)}</strong><small>Waiting · ${taskSummary.percentages.waiting}%</small></span></div><div class="task-status-item"><i class="status-dot blocked"></i><span><strong>${taskCountLabel(taskSummary.counts.blocked)}</strong><small>Blocked · ${taskSummary.percentages.blocked}%</small></span></div></div></div>${phasePath}</div></section>`;
   const feedbackPanel =
     current === "PRE_LAUNCH"
       ? `<section class="panel section-gap"><div class="panel-head"><h2>Feedback journey</h2><small>${feedback === null ? "Unknown" : feedback + " recorded"}</small></div><div class="panel-body"><p class="subtle">Learn, fix and retest between each wave of real creator use.</p><div class="feedback-dots" aria-label="${feedback ?? "Unknown"} of 10 feedback participants">${Array.from({ length: 10 }, (_, i) => `<i class="${feedback !== null && i < feedback ? "done" : ""}"></i>`).join("")}</div><div class="feedback-markers"><span>3 · first learning</span><span>6 · retest</span><span>10 · validate</span></div></div></section>`
       : "";
+  const growthPanel =
+    current === "GROWTH"
+      ? `<section class="panel section-gap growth-boundary"><div class="panel-head"><div><div class="eyebrow">POST-LAUNCH ONLY</div><h2>Growth operating loop</h2></div><small>Pre-launch work stays separate</small></div><div class="panel-body"><p class="subtle">Measure → Acquire → Activate → Retain → Monetize → Learn. This view contains only the post-launch Growth register; it does not pass launch gates, authorize spend or replace pre-launch evidence.</p><div class="feedback-markers"><span>Subscribers first</span><span>Activation by successful export</span><span>Evidence before scale</span></div></div></section>`
+      : "";
   $("#main").innerHTML =
     head(
       "Work plan",
-      `Only tasks and readiness checks for ${lifecycleTitle(current)} are shown.`,
+      current === "GROWTH"
+        ? "Only post-launch Growth tasks are shown. Pre-launch work remains separate."
+        : `Only tasks and readiness checks for ${lifecycleTitle(current)} are shown.`,
     ) +
     taskStatusPanel +
     `<div class="task-toolbar section-gap"><div><h2>Tasks</h2><p>Green is an AI task. Yellow needs admin help.</p></div><div class="toolbar"><select id="task-scope" aria-label="Choose task group"><option value="all" ${planTaskView === "all" ? "selected" : ""}>All tasks</option><option value="ready" ${planTaskView === "ready" ? "selected" : ""}>AI tasks</option><option value="admin" ${planTaskView === "admin" ? "selected" : ""}>Admin help needed</option></select><input id="task-search" type="search" placeholder="Search tasks…" aria-label="Search tasks"><select id="task-filter" aria-label="Filter tasks by status"><option value="ALL">All statuses</option>${["BLOCKED", "IN PROGRESS", "NOT STARTED", "COMPLETE"].map((s) => `<option value="${s}">${label(s)}</option>`).join("")}</select></div></div><div class="status-count" id="task-count"></div><section class="task-board" id="tasks"></section>${feedbackPanel}<section class="section-gap"><div class="page-head compact-head"><div><div class="eyebrow">${esc(gateGroup.toUpperCase())} READINESS</div><h2>Evidence before the next lifecycle step</h2><p>Open a check to review its meaning, evidence, owner and required action.</p></div></div><div class="callout">${gateGroup === "Launch" ? "Official launch requires every launch check plus the final team decision." : "Creator outreach waits for social proof and recruitment readiness."}</div><div id="gate-count" class="status-count"></div><div id="gates" class="gate-list"></div></section>`;
@@ -316,7 +321,8 @@ function plan() {
   $("#task-filter").addEventListener("change", render);
   $("#task-scope").addEventListener("change", render);
   render();
-  showGates(gateGroup);
+  if (!gateGroup) $("#gates")?.closest("section")?.remove();
+  if (gateGroup) showGates(gateGroup);
 }
 function showGates(group, openId = "") {
   const gates = data.gates.filter((g) => g.group === group);
@@ -514,7 +520,7 @@ function records() {
 }
 const sharedDashboardApi =
   "https://reaction-creator-default-rtdb.firebaseio.com/dashboard.json";
-const validLifecycles = ["PRE_LAUNCH", "LAUNCH_READY"];
+const validLifecycles = ["PRE_LAUNCH", "GROWTH"];
 async function patchSharedDashboard(values) {
   const response = await fetch(sharedDashboardApi, {
     method: "PATCH",
