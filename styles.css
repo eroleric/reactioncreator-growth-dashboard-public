@@ -3508,11 +3508,23 @@ nav a.active {
 .project-notepad .note-actions small { color: #65728b; line-height: 1.45; }
 .project-notepad #clear-note { flex-shrink: 0; padding: 8px 11px; border-radius: 7px; font-weight: 650; }
 .project-notepad #clear-note:hover, .project-notepad #clear-note:focus-visible { background: #edf5f3; }
+.growth-action-list { display: grid; gap: 14px; }
+.growth-action-card { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 20px 24px; }
+.growth-action-card small { display: block; margin-bottom: 6px; color: #63798b; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.growth-action-card h2 { margin: 0 0 6px; font-size: 18px; }
+.growth-action-card p { margin: 0; color: #607284; font-size: 13px; line-height: 1.5; }
+.growth-action-card .quiet { flex-shrink: 0; }
+.owner-action-detail { line-height: 1.6; }
+.owner-action-detail h3 { margin: 22px 0 8px; }
+.owner-action-detail .admin-steps { padding-left: 23px; }
+.owner-action-detail .admin-steps li { margin: 0 0 10px; }
+.overview-attention-list .text-btn { justify-self: start; }
 @media(max-width:600px) {
   .project-notepad .panel-head { flex-direction: column; gap: 12px; padding: 21px 20px 17px; }
   .project-notepad .panel-body { padding: 20px; }
   .project-notepad .note-actions { flex-direction: row; align-items: flex-start; }
   .project-notepad #clear-note { margin-left: auto; }
+  .growth-action-card { align-items: flex-start; flex-direction: column; padding: 20px; }
 }
 
 /* Authenticated customer-support workspace. */
