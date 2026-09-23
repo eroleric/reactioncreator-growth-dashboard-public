@@ -49,14 +49,11 @@ let data,
   failedAttempts = 0,
   planTaskView = "all",
   growthTab = "home",
-  prelaunchTab = "home",
   adminState = {
     overviewNote: "",
     taskOverrides: {},
     taskNotes: {},
     taskBlockers: {},
-    gateOverrides: {},
-    gateNotes: {},
     project: {},
     updates: [],
   },
@@ -89,7 +86,6 @@ const money = (v) =>
   }).format(v);
 const titles = {
   overview: "Overview",
-  plan: "Pre Launch",
   growth: "Growth & budget",
   records: "Project records",
   support: "Customer support",
@@ -119,12 +115,7 @@ const label = (s) =>
 const taskCountLabel = (count) => `${count} ${count === 1 ? "task" : "tasks"}`;
 const tag = (s) =>
   `<span class="tag ${statusClass(s)}">${esc(label(s))}</span>`;
-const taskStatus = (t) => {
-  const status = adminState.taskOverrides[t.id] || t.status;
-  return t.lifecycle === "PRE_LAUNCH" && status === "BLOCKED"
-    ? "IN PROGRESS"
-    : status;
-};
+const taskStatus = t => adminState.taskOverrides[t.id] || t.status;
 function taskStatusSummary(tasks) {
   const counts = { complete: 0, inProgress: 0, waiting: 0, blocked: 0 };
   tasks.forEach((task) => {
@@ -149,10 +140,8 @@ function taskStatusSummary(tasks) {
     remainingPercent: total ? Math.round(((total - counts.complete) / total) * 100) : 0,
   };
 }
-const gateStatus = (g) => adminState.gateOverrides[g.id] || g.status;
 const lifecycleTitle = (value) =>
   ({
-    PRE_LAUNCH: "Pre-launch",
     GROWTH: "Growth",
   })[value] || value.replaceAll("_", " ");
 const taskIsAI = (t) => t.category === "AI_TASK";
@@ -247,7 +236,6 @@ function taskAdminSteps(t) {
 function taskDetail(id, currentNote = "", currentBlocker = "") {
   const t = data.tasks.find((item) => item.id === id);
   if (!t) return;
-  if (t.lifecycle === "PRE_LAUNCH") return prelaunchTaskEditor(t, currentNote, currentBlocker);
   if (t.execution) return growthTaskDetail(t, currentNote, currentBlocker);
   const phase = data.phases.find((item) => item.id === t.phaseId),
     w = t.workbook || {},
@@ -265,7 +253,7 @@ function taskDetail(id, currentNote = "", currentBlocker = "") {
   );
 }
 function overview() {
-  const subscribers = metric("Total active subscribers"), feedback = data.registeredFeedback;
+  const subscribers = metric("Total active subscribers");
   const owners = data.owners.filter(o => ["OPEN", "BLOCKED"].includes(o.status) && !/GR:/.test(o.blocks));
   const approvals = (data.growthSystem?.approvals || []).filter(item => item.status === "READY");
   const attentionCount = owners.length + approvals.length;
@@ -273,62 +261,44 @@ function overview() {
     const summary = taskStatusSummary(data.tasks.filter(t => t.lifecycle === lifecycle));
     const next = nextLifecycleTask(lifecycle);
     return `<article class="panel overview-workspace-card ${tone}">
-      <div class="overview-workspace-head"><div><span class="overview-symbol" aria-hidden="true">${tone === "prelaunch" ? "◈" : "↗"}</span><h2>${name}</h2><p>${description}</p></div><span class="tag neutral">${status}</span></div>
+      <div class="overview-workspace-head"><div><span class="overview-symbol" aria-hidden="true">${"↗"}</span><h2>${name}</h2><p>${description}</p></div><span class="tag neutral">${status}</span></div>
       <div class="overview-progress"><div><span>${summary.counts.complete} of ${summary.total} tasks complete</span><strong>${summary.percentages.complete}%</strong></div><div class="overview-progress-track" role="progressbar" aria-label="${name} tasks complete" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${summary.percentages.complete}"><i style="--progress:${summary.percentages.complete}%"></i></div></div>
-      ${next ? `<button class="overview-next-task" type="button" data-task-detail="${esc(next.id)}"><span>${lifecycle === "GROWTH" && !data.growthLaunchAuthorized ? "Next in the plan" : "Next AI task"}</span><strong>${esc(next.title)}</strong></button>` : '<div class="overview-next-task empty"><strong>No unfinished AI tasks</strong></div>'}
+      ${next ? `<button class="overview-next-task" type="button" data-task-detail="${esc(next.id)}"><span>Next AI task</span><strong>${esc(next.title)}</strong></button>` : '<div class="overview-next-task empty"><strong>No unfinished AI tasks</strong></div>'}
       <div class="overview-workspace-footer"><button class="text-btn" type="button" data-go="${destination}">Open ${name} <span aria-hidden="true">→</span></button></div>
     </article>`;
   };
   const attentionItems = [
-    ...owners.map(item => `<article><span>Pre Launch</span><strong>${esc(item.trigger)}</strong></article>`),
+    ...owners.map(item => `<article><span>Growth</span><strong>${esc(item.trigger)}</strong></article>`),
     ...approvals.map(item => `<article><span>Growth decision</span><strong>${esc(item.decision)}</strong></article>`),
   ].join("");
   $("#main").innerHTML = `<div class="overview-calm">
-    <header class="overview-heading"><div><div class="eyebrow">YOUR PROJECT AT A GLANCE</div><h1>Overview</h1><p>Small steps toward your first 5 paying subscribers.</p></div><span class="overview-season">${data.growthLaunchAuthorized ? "Growth" : "Pre-launch"}</span></header>
-    <section class="overview-kpis" aria-label="Project at a glance">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Useful feedback", `${feedback == null ? "—" : feedback} <span>/ 10</span>`, feedback == null ? "Not measured yet" : "Creator feedback recorded")}${stat("Budget left", money(data.budget.remaining), `${money(data.budget.spent)} spent · ${money(data.budget.total)} total`)}</section>
-    <section class="overview-workspaces" aria-label="Pre Launch and Growth workspaces">${workspace("PRE_LAUNCH", "Pre Launch", "Build, test, and learn with creators.", "In progress", "plan", "prelaunch")}${workspace("GROWTH", "Growth & budget", "Turn real usage into paying subscribers.", data.growthLaunchAuthorized ? "Active" : "After launch", "growth", "growth")}</section>
+    <header class="overview-heading"><div><div class="eyebrow">YOUR PROJECT AT A GLANCE</div><h1>Overview</h1><p>Small steps toward your first 5 paying subscribers.</p></div><span class="overview-season">Growth</span></header>
+    <section class="overview-kpis" aria-label="Project at a glance">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Monthly recurring revenue", display(metric("MRR").value), esc(metric("MRR").asOf))}${stat("Budget left", money(data.budget.remaining), `${money(data.budget.spent)} spent · ${money(data.budget.total)} total`)}</section>
+    <section class="overview-workspaces" aria-label="Growth workspace">${workspace("GROWTH", "Growth & budget", "Turn real usage into paying subscribers.", "Current scope", "growth", "growth")}</section>
     <section class="overview-attention ${attentionCount ? "has-actions" : "clear"}" aria-label="Admin attention">
-      ${attentionCount ? `<details><summary><span class="overview-attention-icon" aria-hidden="true">!</span><span><strong>${attentionCount} ${attentionCount === 1 ? "item needs" : "items need"} your attention</strong><small>Decisions, access, or hands-on help</small></span><span class="overview-expand">View items <span aria-hidden="true">⌄</span></span></summary><div class="overview-attention-list">${attentionItems}</div><div class="overview-attention-footer">${owners.length ? '<button class="text-btn" type="button" data-plan-scope="admin">Open admin tasks →</button>' : ""}${approvals.length ? '<button class="text-btn" type="button" data-go="growth">Open Growth decisions →</button>' : ""}</div></details>` : '<strong>Nothing needs your attention right now.</strong>'}
+      ${attentionCount ? `<details><summary><span class="overview-attention-icon" aria-hidden="true">!</span><span><strong>${attentionCount} ${attentionCount === 1 ? "item needs" : "items need"} your attention</strong><small>Decisions, access, or hands-on help</small></span><span class="overview-expand">View items <span aria-hidden="true">⌄</span></span></summary><div class="overview-attention-list">${attentionItems}</div><div class="overview-attention-footer">${owners.length ? '<button class="text-btn" type="button" data-go="growth">Open admin tasks →</button>' : ""}${approvals.length ? '<button class="text-btn" type="button" data-go="growth">Open Growth decisions →</button>' : ""}</div></details>` : '<strong>Nothing needs your attention right now.</strong>'}
     </section>
   </div>`;
 }
 
-function plan(growthLibrary = false) {
-  if (!growthLibrary && prelaunchTab !== "records") return prelaunch();
-  const feedback = data.registeredFeedback,
-    current = growthLibrary ? "GROWTH" : "PRE_LAUNCH",
+function plan() {
+  const current = "GROWTH",
     scope = data.tasks.filter((t) => t.lifecycle === current),
     taskSummary = taskStatusSummary(scope),
     phaseIds = new Set(scope.map((t) => t.phaseId)),
-    phases = data.phases.filter((p) => phaseIds.has(p.id)),
-    gateGroup = current === "PRE_LAUNCH" ? "Social proof" : "";
-  const phasePath = `<div class="task-status-phase-path"><div class="task-status-phase-head"><div><div class="eyebrow">${current === "PRE_LAUNCH" ? "PRE-LAUNCH PATH" : "GROWTH PATH"}</div><h3>${current === "PRE_LAUNCH" ? "The path to launch readiness" : "The post-launch growth operating loop"}</h3></div></div><div class="phase-path">${phases.map((p) => `<button data-phase="${esc(p.id)}" class="${p.status === "IN PROGRESS" ? "current" : p.status === "BLOCKED" ? "blocked" : ""}" aria-label="Open ${esc(p.title)} details"><div class="track"></div><small>${esc(p.id)}</small><span class="phase-path-title" title="${esc(p.title)}">${esc(p.title)}</span><span class="phase-state">${taskCountLabel(scope.filter((t) => t.phaseId === p.id).length)} · ${esc(label(p.status))}</span></button>`).join("")}</div></div>`;
+    phases = data.phases.filter((p) => phaseIds.has(p.id));
+  const phasePath = `<div class="task-status-phase-path"><div class="task-status-phase-head"><div><div class="eyebrow">GROWTH PATH</div><h3>The Growth operating loop</h3></div></div><div class="phase-path">${phases.map((p) => `<button data-phase="${esc(p.id)}" class="${p.status === "IN PROGRESS" ? "current" : p.status === "BLOCKED" ? "blocked" : ""}" aria-label="Open ${esc(p.title)} details"><div class="track"></div><small>${esc(p.id)}</small><span class="phase-path-title" title="${esc(p.title)}">${esc(p.title)}</span><span class="phase-state">${taskCountLabel(scope.filter((t) => t.phaseId === p.id).length)} · ${esc(label(p.status))}</span></button>`).join("")}</div></div>`;
   const statusLegend = [
     `<div class="task-status-item"><i class="status-dot complete"></i><span><strong>${taskCountLabel(taskSummary.counts.complete)}</strong><small>Completed · ${taskSummary.percentages.complete}%</small></span></div>`,
     `<div class="task-status-item"><i class="status-dot progress"></i><span><strong>${taskCountLabel(taskSummary.counts.inProgress)}</strong><small>In progress · ${taskSummary.percentages.inProgress}%</small></span></div>`,
     `<div class="task-status-item"><i class="status-dot waiting"></i><span><strong>${taskCountLabel(taskSummary.counts.waiting)}</strong><small>Not started · ${taskSummary.percentages.waiting}%</small></span></div>`,
-    current === "PRE_LAUNCH" ? "" : `<div class="task-status-item"><i class="status-dot blocked"></i><span><strong>${taskCountLabel(taskSummary.counts.blocked)}</strong><small>Blocked · ${taskSummary.percentages.blocked}%</small></span></div>`,
+    `<div class="task-status-item"><i class="status-dot blocked"></i><span><strong>${taskCountLabel(taskSummary.counts.blocked)}</strong><small>Blocked · ${taskSummary.percentages.blocked}%</small></span></div>`,
   ].join("");
   const taskStatusPanel = `<section class="panel task-status-panel" data-lifecycle="${esc(current)}" aria-labelledby="task-status-title"><div class="panel-head"><div><div class="eyebrow">TASK STATUS</div><h2 id="task-status-title">How the work is moving</h2></div><small>${esc(lifecycleTitle(current))} · ${taskCountLabel(taskSummary.total)}</small></div><div class="task-status-layout"><div class="task-donut" role="img" aria-label="${taskSummary.percentages.complete}% complete, ${taskSummary.remainingPercent}% left, across ${taskSummary.total} tasks" style="--complete:${taskSummary.percentages.complete}%;--progress:${taskSummary.percentages.inProgress}%;--waiting:${taskSummary.percentages.waiting}%;--blocked:${taskSummary.percentages.blocked}%;"><div class="task-donut-center"><strong>${taskSummary.total ? `${taskSummary.percentages.complete}%` : "—"}</strong><span>complete</span><small>${taskSummary.total ? `${taskSummary.remainingPercent}% left` : "No tasks"}</small></div></div><div class="task-status-copy"><div class="task-status-legend">${statusLegend}</div></div>${phasePath}</div></section>`;
-  const feedbackPanel =
-    current === "PRE_LAUNCH"
-      ? `<section class="panel section-gap"><div class="panel-head"><h2>Feedback journey</h2><small>${feedback === null ? "Unknown" : feedback + " recorded"}</small></div><div class="panel-body"><p class="subtle">Learn, fix and retest between each wave of real creator use.</p><div class="feedback-dots" aria-label="${feedback ?? "Unknown"} of 10 feedback participants">${Array.from({ length: 10 }, (_, i) => `<i class="${feedback !== null && i < feedback ? "done" : ""}"></i>`).join("")}</div><div class="feedback-markers"><span>3 · first learning</span><span>6 · retest</span><span>10 · validate</span></div></div></section>`
-      : "";
-  const growthPanel =
-    current === "GROWTH"
-      ? `<section class="panel section-gap growth-boundary"><div class="panel-head"><div><div class="eyebrow">POST-LAUNCH ONLY</div><h2>Growth operating loop</h2></div><small>Pre-launch work stays separate</small></div><div class="panel-body"><p class="subtle">Measure → Acquire → Activate → Retain → Monetize → Learn. This view contains only the post-launch Growth register; it does not pass launch gates, authorize spend or replace pre-launch evidence.</p><div class="feedback-markers"><span>Subscribers first</span><span>Activation by successful export</span><span>Evidence before scale</span></div></div></section>`
-      : "";
   $("#main").innerHTML =
-    head(
-      growthLibrary ? "Growth · detailed task records" : "Pre Launch",
-      current === "GROWTH"
-        ? "Only post-launch Growth tasks are shown. Pre-launch work remains separate."
-        : `Only tasks and readiness checks for ${lifecycleTitle(current)} are shown.`,
-      growthLibrary ? '<span class="tag neutral">Post-launch strategy</span>' : "",
-    ) +
-    (growthLibrary ? growthNavigation() : prelaunchNavigation()) +
+    head("Growth · detailed task records", "Tasks, evidence and execution context.") + growthNavigation() +
     taskStatusPanel +
-    `<div class="task-toolbar section-gap"><div><h2>Tasks</h2><p>Green is an AI task. Yellow needs admin help. Critical marks recurring daily, weekly or monthly work.</p></div><div class="toolbar"><select id="task-scope" aria-label="Choose task group"><option value="all" ${planTaskView === "all" ? "selected" : ""}>All tasks</option><option value="critical" ${planTaskView === "critical" ? "selected" : ""}>Critical recurring</option><option value="ready" ${planTaskView === "ready" ? "selected" : ""}>AI tasks</option><option value="admin" ${planTaskView === "admin" ? "selected" : ""}>Admin help needed</option></select><input id="task-search" type="search" placeholder="Search tasks…" aria-label="Search tasks"><select id="task-filter" aria-label="Filter tasks by status"><option value="ALL">All statuses</option>${["BLOCKED", "IN PROGRESS", "NOT STARTED", "COMPLETE"].map((s) => `<option value="${s}">${label(s)}</option>`).join("")}</select></div></div><div class="status-count" id="task-count"></div><section class="task-board" id="tasks"></section>${feedbackPanel}<section class="section-gap"><div class="page-head compact-head"><div><div class="eyebrow">${esc(gateGroup.toUpperCase())} READINESS</div><h2>Evidence before the next lifecycle step</h2><p>Open a check to review its meaning, evidence, owner and required action.</p></div></div><div class="callout">${gateGroup === "Launch" ? "Official launch requires every launch check plus the final team decision." : "Creator outreach waits for social proof and recruitment readiness."}</div><div id="gate-count" class="status-count"></div><div id="gates" class="gate-list"></div></section>`;
+    `<div class="task-toolbar section-gap"><div><h2>Tasks</h2><p>Green is an AI task. Yellow needs admin help. Critical marks recurring daily, weekly or monthly work.</p></div><div class="toolbar"><select id="task-scope" aria-label="Choose task group"><option value="all" ${planTaskView === "all" ? "selected" : ""}>All tasks</option><option value="critical" ${planTaskView === "critical" ? "selected" : ""}>Critical recurring</option><option value="ready" ${planTaskView === "ready" ? "selected" : ""}>AI tasks</option><option value="admin" ${planTaskView === "admin" ? "selected" : ""}>Admin help needed</option></select><input id="task-search" type="search" placeholder="Search tasks…" aria-label="Search tasks"><select id="task-filter" aria-label="Filter tasks by status"><option value="ALL">All statuses</option>${["BLOCKED", "IN PROGRESS", "NOT STARTED", "COMPLETE"].map((s) => `<option value="${s}">${label(s)}</option>`).join("")}</select></div></div><div class="status-count" id="task-count"></div><section class="task-board" id="tasks"></section>`;
   const taskHelper = document.querySelector(".task-toolbar p");
   if (current === "GROWTH") {
     const recurringOption = $("#task-scope option[value='critical']");
@@ -338,16 +308,6 @@ function plan(growthLibrary = false) {
       recurringOption.insertAdjacentHTML("afterend", `<option value="one-time" ${planTaskView === "one-time" ? "selected" : ""}>One Time</option>`);
     }
     if (taskHelper) taskHelper.textContent = "Recurring tasks repeat on a schedule. One Time tasks happen when their individual trigger applies.";
-  } else {
-    $("#task-scope option[value='critical']")?.remove();
-    if (taskHelper) taskHelper.textContent = "Green is an AI task. Yellow needs admin help.";
-    $("#task-filter option[value='BLOCKED']")?.remove();
-    const readiness = $("#gates")?.closest("section");
-    if (readiness) {
-      readiness.querySelector("h2").textContent = "Evidence reviews";
-      readiness.querySelector(".callout").textContent = "Evidence reviews record what is known; they never change task availability.";
-    }
-    $(".task-status-phase-head h3").textContent = "Pre-Launch work overview";
   }
   const render = () => {
     const q = $("#task-search").value.toLowerCase(),
@@ -379,14 +339,14 @@ function plan(growthLibrary = false) {
             status = taskStatus(t),
             note = adminState.taskNotes?.[t.id] || "",
             blocker = adminState.taskBlockers?.[t.id] || t.blockedReason || "",
-            editableStatuses = current === "PRE_LAUNCH" ? ["COMPLETE", "IN PROGRESS", "NOT STARTED"] : ["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"],
+            editableStatuses = ["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"],
             kind = taskNeedsAdmin(t) ? "admin-help" : "ai-task",
             category = taskNeedsAdmin(t) ? "Admin help needed" : "AI task",
             w = t.workbook || {},
             source = w.sourceUrl
               ? `<a href="${esc(w.sourceUrl)}" target="_blank" rel="noopener">Open source ↗</a>`
               : "—";
-          return `<article class="task-row ${kind}${growthTaskCadence(t) ? " critical-task-row" : ""}" data-task-row="${esc(t.id)}"><header class="task-card-header"><div class="task-card-identity"><div class="task-card-kicker"><span>${esc(t.id)}</span><span>${esc(phase?.title || t.phaseId)}</span><span class="task-kind">${category}</span>${criticalBadge(t)}</div><h3>${esc(t.title)}</h3></div><div class="task-card-controls"><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${editableStatuses.map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><span class="task-save-status">${note || blocker ? "Saved" : "Auto-save on"}</span></div></header><div class="task-card-body"><section class="task-work"><div class="task-brief"><div><small>SUCCESS LOOKS LIKE</small><p>${esc(t.success)}</p></div></div>${current !== "PRE_LAUNCH" && status === "BLOCKED" ? `<label class="blocked-reason task-row-blocker"><span>WHY BLOCKED</span><textarea data-task-row-blocker="${esc(t.id)}" rows="2" maxlength="1000" placeholder="Describe why this task is blocked…">${esc(blocker)}</textarea></label>` : ""}${t.execution ? `<div class="growth-task-context"><small>WHEN AI ACTS</small><p>${esc(t.execution.trigger)}</p><small>AI DELIVERABLE</small><p>${esc(t.execution.output)}</p><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</section><section class="task-row-fields"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="5" maxlength="1000" placeholder="Add a short update or evidence…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">Open full task details →</button></section></div><details class="task-baseline"><summary>Guidance, context and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
+          return `<article class="task-row ${kind}${growthTaskCadence(t) ? " critical-task-row" : ""}" data-task-row="${esc(t.id)}"><header class="task-card-header"><div class="task-card-identity"><div class="task-card-kicker"><span>${esc(t.id)}</span><span>${esc(phase?.title || t.phaseId)}</span><span class="task-kind">${category}</span>${criticalBadge(t)}</div><h3>${esc(t.title)}</h3></div><div class="task-card-controls"><label class="task-row-status"><span>Status</span><select data-task-row-status="${esc(t.id)}">${editableStatuses.map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><span class="task-save-status">${note || blocker ? "Saved" : "Auto-save on"}</span></div></header><div class="task-card-body"><section class="task-work"><div class="task-brief"><div><small>SUCCESS LOOKS LIKE</small><p>${esc(t.success)}</p></div></div>${status === "BLOCKED" ? `<label class="blocked-reason task-row-blocker"><span>WHY BLOCKED</span><textarea data-task-row-blocker="${esc(t.id)}" rows="2" maxlength="1000" placeholder="Describe why this task is blocked…">${esc(blocker)}</textarea></label>` : ""}${t.execution ? `<div class="growth-task-context"><small>WHEN AI ACTS</small><p>${esc(t.execution.trigger)}</p><small>AI DELIVERABLE</small><p>${esc(t.execution.output)}</p><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}${taskNeedsAdmin(t) ? `<div class="task-admin-instructions"><small>ADMIN STEPS</small>${taskAdminSteps(t)}</div>` : ""}</section><section class="task-row-fields"><label><span>Note or evidence</span><textarea data-task-row-note="${esc(t.id)}" rows="5" maxlength="1000" placeholder="Add a short update or evidence…">${esc(note)}</textarea></label><button class="task-detail-button" data-task-detail="${esc(t.id)}">Open full task details →</button></section></div><details class="task-baseline"><summary>Guidance, context and source</summary><div class="task-baseline-grid"><div><small>WHY IT MATTERS</small><p>${esc(w.guidance || "No additional guidance recorded.")}</p></div><div><small>SUCCESS CRITERIA</small><p>${esc(t.success)}</p></div><div><small>WORK CONTEXT</small><p>${esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "—")}</p></div><div><small>SOURCE</small><p>${source}</p></div></div></details></article>`;
         },
       activeRows = rows.filter((t) => taskStatus(t) !== "COMPLETE"),
       completedRows = rows.filter((t) => taskStatus(t) === "COMPLETE"),
@@ -403,139 +363,9 @@ function plan(growthLibrary = false) {
   $("#task-filter").addEventListener("change", render);
   $("#task-scope").addEventListener("change", render);
   render();
-  if (!gateGroup) $("#gates")?.closest("section")?.remove();
-  if (gateGroup) showGates(gateGroup);
-}
-const prelaunchDrafts = new Map();
-let prelaunchSearch = "", prelaunchFilter = "active";
-const prelaunchStatuses = ["NOT STARTED", "IN PROGRESS", "COMPLETE"];
-const prelaunchNote = t => adminState.taskNotes?.[t.id] ?? t.evidence ?? "";
-function prelaunchTaskEditor(t, currentNote = "") {
-  const recordedNote = currentNote || prelaunchNote(t);
-  const longRecord = recordedNote.length > 1000;
-  const draft = prelaunchDrafts.get(t.id) || {
-    status: taskStatus(t), note: longRecord ? "" : recordedNote,
-  };
-  const phase = data.phases.find(p => p.id === t.phaseId);
-  openDetail("PRE-LAUNCH · NOTES & UPDATE", t.title, `<form class="prelaunch-editor" data-prelaunch-editor="${esc(t.id)}">
-    <p class="subtle">${esc(phase?.title || t.phaseId)} · ${esc(t.id)}</p>
-    <p>${esc(t.success)}</p>
-    <label>Task status<select name="status" required>${!prelaunchStatuses.includes(draft.status) ? '<option value="">Choose a status to save an update</option>' : ""}${prelaunchStatuses.map(s => `<option value="${s}" ${draft.status === s ? "selected" : ""}>${label(s)}</option>`).join("")}</select></label>
-    ${longRecord ? '<p class="subtle">The earlier detailed note is preserved below. Write a short new update here.</p>' : ""}
-    <label>Admin notes & evidence<textarea name="note" rows="7" maxlength="1000" placeholder="What happened? Add observations, decisions, links, or the next step.">${esc(draft.note)}</textarea></label>
-    <div class="prelaunch-note-help"><span>Completion needs evidence. Every unfinished task remains available to work.</span><span data-note-capacity></span></div>
-    <div class="prelaunch-editor-actions"><button type="submit">Save update</button><span role="status" aria-live="polite" data-editor-status>${prelaunchDrafts.has(t.id) ? "Unsaved draft — kept while you browse" : "Updates are shared across devices"}</span></div>
-    ${growthMore("Recorded evidence", `<div class="task-note-expanded">${formatTaskNote(data.adminState?.taskNotes?.[t.id] || t.evidence || recordedNote)}</div>`)}
-    ${taskNeedsAdmin(t) ? growthMore("Admin steps", taskAdminSteps(t)) : ""}
-    ${growthMore("Guidance & source record", `<p>${esc(t.workbook?.guidance || "No additional guidance recorded.")}</p><p><strong>Source status:</strong> ${esc(t.status)}</p><p><strong>Original target:</strong> ${esc(t.target || "Not recorded")}</p><p>${esc(t.source || "")}</p><p>Saved updates do not by themselves approve outreach, spending or launch.</p>`)}
-  </form>`);
-  updatePrelaunchCapacity($("[data-prelaunch-editor]"));
-}
-function readPrelaunchDraft(form) {
-  return { status: form.elements.status.value, note: form.elements.note.value };
-}
-function updatePrelaunchCapacity(form) {
-  const draft = readPrelaunchDraft(form);
-  const remaining = 1000 - draft.note.trim().length;
-  form.querySelector("[data-note-capacity]").textContent = remaining < 0 ? `${-remaining} characters over the limit` : `${remaining} characters available`;
-}
-document.addEventListener("input", event => {
-  const form = event.target.closest("[data-prelaunch-editor]");
-  if (!form) return;
-  prelaunchDrafts.set(form.dataset.prelaunchEditor, readPrelaunchDraft(form));
-  form.querySelector("[data-editor-status]").textContent = "Unsaved draft — kept while you browse";
-  updatePrelaunchCapacity(form);
-});
-document.addEventListener("submit", async event => {
-  const form = event.target.closest("[data-prelaunch-editor]");
-  if (!form) return;
-  event.preventDefault();
-  const id = form.dataset.prelaunchEditor, draft = readPrelaunchDraft(form);
-  prelaunchDrafts.set(id, draft);
-  const message = form.querySelector("[data-editor-status]");
-  const button = form.querySelector('[type="submit"]');
-  button.disabled = true;
-  message.textContent = "Saving…";
-  try {
-    await saveSharedTask(id, draft.status, draft.note.trim(), "");
-    if (JSON.stringify(prelaunchDrafts.get(id)) === JSON.stringify(draft)) {
-      prelaunchDrafts.delete(id);
-      message.textContent = "Saved for everyone";
-    } else message.textContent = "Earlier update saved. Save your latest changes when ready.";
-    if (view === "plan") plan();
-  } catch (error) {
-    message.textContent = `${error.message} Your draft is still here; try saving again.`;
-  } finally { button.disabled = false; }
-});
-window.addEventListener("beforeunload", event => {
-  if (!prelaunchDrafts.size) return;
-  event.preventDefault();
-  event.returnValue = "";
-});
-function prelaunchNavigation() {
-  const selected = prelaunchTab === "records" ? "work" : prelaunchTab;
-  return `<nav class="growth-tabs" aria-label="Pre-launch sections">${[["home", "Summary"], ["work", "Tasks"], ["readiness", "Readiness"]].map(([id, title]) => `<button data-prelaunch-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
 }
 function sharedProjectNotepad(scope) {
   return `<section class="panel project-notepad"><div class="panel-head"><div><div class="eyebrow">SHARED PROJECT NOTE</div><h2>Project notepad</h2><p>Quick reminders, decisions and questions for ${esc(scope)}.</p></div><span id="note-status" class="save-status" role="status">${esc(noteSyncStatus)}</span></div><div class="panel-body"><label for="admin-note">Project notes</label><textarea id="admin-note" rows="4" maxlength="3000" placeholder="Jot down what to follow up on…">${esc(adminState.overviewNote)}</textarea><div class="note-actions"><small>Changes save automatically for everyone who unlocks this dashboard. Use a task’s notes for task-specific evidence.</small><div class="note-buttons"><button id="clear-note" class="text-btn">Clear</button></div></div></div></section>`;
-}
-function prelaunch() {
-  const tasks = data.tasks.filter(t => t.lifecycle === "PRE_LAUNCH");
-  const summary = taskStatusSummary(tasks);
-  const next = nextLifecycleTask("PRE_LAUNCH");
-  const owners = data.owners.filter(o => ["OPEN", "BLOCKED"].includes(o.status) && !/GR:/.test(o.blocks));
-  const feedback = data.registeredFeedback;
-  const links = items => `<div class="prelaunch-task-list">${items.map(t => `<article class="prelaunch-task-card"><div class="prelaunch-task-heading"><h3>${esc(t.title)}</h3>${tag(prelaunchStatuses.includes(taskStatus(t)) ? taskStatus(t) : "Review task update")}</div><p class="prelaunch-note-preview">${esc(prelaunchDrafts.get(t.id)?.note || prelaunchNote(t) || "No notes yet. Add an update, decision or evidence.")}</p><div class="prelaunch-task-footer"><small>${esc(t.id)} · ${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}${prelaunchDrafts.has(t.id) ? " · Unsaved draft" : ""}</small><button class="quiet" data-task-detail="${esc(t.id)}">Notes & update status →</button></div></article>`).join("")}</div>`;
-  let body = "";
-  if (prelaunchTab === "home") {
-    body = `<section class="growth-goal"><div><small>OUR NEXT GOAL</small><h2>Learn from 10 creators. Get ready to launch.</h2><p>Prepare the product and public presence, collect useful feedback, then fix and retest.</p></div><span class="tag neutral">Pre-launch only</span></section>`;
-    body += `<section class="stats growth-summary-stats">${stat("Tasks complete", `${summary.counts.complete} <span>/ ${summary.total}</span>`, "Across the pre-launch plan")}${stat("Useful feedback", `${feedback == null ? "—" : feedback} <span>/ 10</span>`, feedback == null ? "Not measured yet" : "Learn at 3, 6 and 10 creators")}${stat("Open admin actions", owners.length, "Decisions, access or hands-on help")}</section>`;
-    body += `<div class="growth-grid">${growthPanel("AI’s next task", next ? `<h3>${esc(next.title)}</h3><p>${esc(next.success)}</p><button class="quiet" data-task-detail="${esc(next.id)}">Notes & update status</button><p class="subtle">Every unfinished Pre-Launch task can be started at any time.</p>` : '<p>No unfinished AI task is available.</p>')}${growthPanel(owners.length ? "Your action needed" : "Your actions", owners.length ? `<p>${owners.length} open ${owners.length === 1 ? "action" : "actions"}. Open an item for the exact steps.</p>${owners.map(o => growthMore(esc(o.trigger), `<h3>Admin steps</h3>${instructionSteps(o.action)}<p><strong>When:</strong> ${esc(o.trigger)}</p><p><strong>Affects:</strong> ${esc(o.blocks)}</p><div class="prelaunch-action-links">${tasks.filter(t => (o.blocks.match(/(?:WB:)?[A-Z]\d{2}[A-Z]?/g) || []).some(id => t.id === (id.startsWith("WB:") ? id : `WB:${id}`))).map(t => `<button type="button" class="quiet" data-task-detail="${esc(t.id)}">Update ${esc(t.id.replace("WB:", ""))} & notes</button>`).join("")}<button type="button" class="text-btn" data-project-notepad>Add a project note</button></div>`)).join("")}` : '<p class="growth-none">Nothing needed from you.</p>')}</div>`;
-    body += sharedProjectNotepad("Pre Launch");
-    body += `<div class="growth-simple-footer"><p>Every unfinished Pre-Launch task is independently available. Task-specific approvals apply only to the external action involved.</p><button class="text-btn" data-prelaunch-tab="work">Browse pre-launch tasks →</button></div>`;
-  } else if (prelaunchTab === "work") {
-    body = `<div class="growth-intro"><h2>Find the work you need</h2><p>Open any task to add notes, change its status, or explain a blocker.</p></div><div class="toolbar"><input id="prelaunch-search" type="search" aria-label="Search pre-launch tasks" placeholder="Search tasks or notes…" value="${esc(prelaunchSearch)}"><select id="prelaunch-filter" aria-label="Filter pre-launch tasks"><option value="active">Unfinished tasks</option><option value="ai">AI tasks</option><option value="admin">Admin help needed</option><option value="complete">Completed tasks</option><option value="notes">With notes</option><option value="all">All tasks</option></select></div><p id="prelaunch-count" class="status-count" aria-live="polite"></p><div id="prelaunch-tasks"></div><div class="growth-simple-footer"><p>Prefer to edit several tasks on one page?</p><button class="text-btn" data-prelaunch-tab="records">Edit detailed task records →</button></div>`;
-  } else {
-    body = `<div class="growth-intro"><h2>Evidence reviews</h2><p>Record what is known about social proof, outreach and launch readiness. Reviews never change task availability.</p></div>`;
-    body += growthPanel("Feedback progress", `<p><strong>${feedback == null ? "Not measured yet" : `${feedback} of 10 useful feedback completions`}</strong></p><div class="feedback-dots" aria-label="${feedback ?? "Unknown"} of 10 feedback participants">${Array.from({ length: 10 }, (_, i) => `<i class="${feedback != null && i < feedback ? "done" : ""}"></i>`).join("")}</div><div class="feedback-markers"><span>3 · learn</span><span>6 · fix and retest</span><span>10 · validate</span></div>`);
-    body += `<section class="section-gap"><div class="growth-tabs" aria-label="Readiness groups"><button data-gate-group="Social proof">Social proof & outreach</button><button data-gate-group="Launch">Launch checks</button></div><p class="subtle">A saved review does not itself approve outreach, spending or launch.</p><div id="gate-count" class="status-count"></div><div id="gates" class="gate-list"></div></section>`;
-  }
-  $("#main").innerHTML = head("Pre-Launch", "See what’s next, where help is needed, and how launch preparation is progressing.") + prelaunchNavigation() + `<div class="growth-workspace growth-simple prelaunch-workspace">${body}</div>`;
-  if (prelaunchTab === "readiness") showGates("Social proof");
-  if (prelaunchTab === "work") {
-    $("#prelaunch-filter").value = prelaunchFilter;
-    const render = () => {
-      const query = $("#prelaunch-search").value.trim().toLowerCase();
-      const filter = $("#prelaunch-filter").value;
-      prelaunchSearch = $("#prelaunch-search").value; prelaunchFilter = filter;
-      const shown = tasks.filter(t => `${t.id} ${t.title} ${t.phaseId} ${prelaunchNote(t)}`.toLowerCase().includes(query) && (filter === "all" || (filter === "notes" ? Boolean(prelaunchNote(t) || prelaunchDrafts.has(t.id)) : filter === "complete" ? taskStatus(t) === "COMPLETE" : taskStatus(t) !== "COMPLETE" && (filter === "ai" ? taskIsAI(t) : filter === "admin" ? taskNeedsAdmin(t) : true))));
-      $("#prelaunch-count").textContent = `${shown.length} of ${tasks.length} pre-launch tasks`;
-      $("#prelaunch-tasks").innerHTML = shown.length ? links(shown) : '<p class="empty">No matching tasks.</p>';
-    };
-    $("#prelaunch-search").addEventListener("input", render);
-    $("#prelaunch-filter").addEventListener("change", render);
-    render();
-  }
-}
-function showGates(group, openId = "") {
-  const gates = data.gates.filter((g) => g.group === group);
-  document.querySelectorAll("[data-gate-group]").forEach((b) => {
-    b.classList.toggle("selected", b.dataset.gateGroup === group);
-    b.setAttribute("aria-pressed", String(b.dataset.gateGroup === group));
-  });
-  $("#gate-count").textContent =
-    `${gates.filter((g) => gateStatus(g) === "PASS").length} of ${gates.length} passed · reviewed evidence required`;
-  const detail = (name, value) =>
-    value && value !== "—"
-      ? `<div class="gate-detail"><small>${esc(name)}</small><p>${esc(value)}</p></div>`
-      : "";
-  $("#gates").innerHTML = gates
-    .map((g) => {
-      const status = gateStatus(g),
-        reviewed = Boolean(adminState.gateOverrides[g.id]);
-      return `<details class="gate" data-gate-id="${esc(g.id)}" ${openId === g.id ? "open" : ""}><summary><div class="gate-copy"><small>${esc(g.id)} · ${esc(g.type)}${reviewed ? " · DASHBOARD REVIEWED" : ""}</small><h3>${esc(g.title)}</h3></div><div class="gate-state">${tag(status)}<span class="gate-chevron" aria-hidden="true">⌄</span></div></summary><div class="gate-details">${detail("Why it matters", g.clarification)}${detail("Related task", g.task)}${detail("Evidence / source", g.source)}${detail("Target", g.target)}${detail("Owner", g.owner)}${detail("Suggested follow-up", g.action)}${detail("Current source evidence", g.evidence)}<div class="gate-review"><div class="gate-review-head"><div><small>YOUR REVIEW</small><h4>Evidence or decision input</h4></div><span class="save-status" id="gate-save-${esc(g.id)}">Auto-save on</span></div><div class="gate-review-fields"><label>Status<select data-gate-status="${esc(g.id)}">${["WAIT", "PASS", "FAIL"].map((v) => `<option value="${v}" ${status === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label><label class="gate-note-field">Your evidence or clarification<textarea data-gate-note="${esc(g.id)}" rows="4" maxlength="2000" placeholder="What did you review? Add evidence, decision details, links, reviewer and date.">${esc(adminState.gateNotes?.[g.id] || "")}</textarea></label></div><div class="gate-review-actions"><small>Changes save automatically. Passed or Needs work still requires evidence or a decision note; it never changes task availability.</small></div></div></div></details>`;
-    })
-    .join("");
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
@@ -580,7 +410,7 @@ function growthBrief(id) {
   const t = data.tasks.find(t => t.id === id);
   const r = data.growthSystem?.routines.find(r => r.id === id);
   const taskText = t?.execution ? `${t.id}: ${t.title}. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
-  return `Work only in the Reaction Creator post-launch Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. ${taskText} Check the authoritative launch decision; before GO only prepare explicitly requested safe internal work. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
+  return `Work only in the Reaction Creator Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. ${taskText} Select useful Growth work within existing authority. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
 }
 function growthPanel(title, body, extra = "") {
   return `<section class="panel growth-panel"><div class="panel-head"><h2>${title}</h2>${extra}</div><div class="panel-body">${body}</div></section>`;
@@ -656,7 +486,7 @@ function growth() {
   const simple = g.adminView;
   if (!simple) { $("#main").innerHTML = head("Growth", "Refresh to load the simplified growth plan."); return; }
   const tasks = data.tasks.filter(t => t.lifecycle === "GROWTH");
-  const launch = data.growthLaunchAuthorized === true;
+
   const pending = g.approvals.filter(p => p.status === "READY");
   const next = tasks.find(t => t.id === g.focus.nextTask && taskAvailable(t)) || tasks.find(taskAvailable);
   const docButton = (path, title) => `<button class="text-btn" data-doc="${esc(path)}">${esc(title)} ↗</button>`;
@@ -668,7 +498,7 @@ function growth() {
   if (growthTab === "home") {
     const count = Number(metric("Total active subscribers").value);
     const target = g.milestones.find(m => !Number.isFinite(count) || m.target > count)?.target;
-    body = `<section class="growth-goal"><div><small>OUR NEXT GOAL</small><h2>${target ? `${target} paying subscribers` : "Choose the next subscriber goal"}</h2><p>${esc(simple.planSummary)}</p></div><span class="tag neutral">${launch ? "Launch approved" : "Growth starts after launch"}</span></section>`;
+    body = `<section class="growth-goal"><div><small>OUR NEXT GOAL</small><h2>${target ? `${target} paying subscribers` : "Choose the next subscriber goal"}</h2><p>${esc(simple.planSummary)}</p></div><span class="tag neutral">Growth</span></section>`;
     body += `<section class="stats growth-stats growth-summary-stats">${growthMetricCard("Total active subscribers","Paying subscribers")}${growthMetricCard("MRR","Monthly recurring revenue")}<article class="stat"><div class="label">Budget left</div><div class="number">${money(data.budget.remaining)}</div><div class="note">${money(data.budget.spent)} spent of ${money(data.budget.total)}</div></article></section>`;
     body += `<div class="growth-grid">${growthPanel("AI’s next task", nextContent)}${growthPanel(pending.length ? "Your action needed" : "Your actions",adminContent)}</div>`;
     body += sharedProjectNotepad("Growth & budget");
@@ -726,28 +556,14 @@ function growth() {
   }));
 }
 
-function baselineCard(record, titleKey) {
-  const title =
-      record[titleKey] ||
-      Object.values(record).find(Boolean) ||
-      "Baseline record",
-    fields = Object.entries(record).filter(
-      ([key, value]) =>
-        key !== titleKey &&
-        value !== null &&
-        value !== "" &&
-        !String(value).startsWith("="),
-    );
-  return `<article class="baseline-card"><h3>${esc(title)}</h3><dl>${fields.map(([key, value]) => `<div><dt>${esc(key)}</dt><dd>${/^https?:\/\//.test(String(value)) ? `<a href="${esc(value)}" target="_blank" rel="noopener">Open source ↗</a>` : esc(value)}</dd></div>`).join("")}</dl></article>`;
-}
 function records() {
   let section = "updates";
   $("#main").innerHTML =
     head(
       "Project records.",
-      "Updates, working documents and the complete migrated workbook baseline.",
+      "Growth updates and working documents.",
     ) +
-    `<div class="tabs" role="group" aria-label="Project record type"><button class="selected" data-record-section="updates" aria-pressed="true">Updates</button><button data-record-section="documents" aria-pressed="false">Documents</button><button data-record-section="baseline" aria-pressed="false">Baseline</button></div><div id="record-content"></div>`;
+    `<div class="tabs" role="group" aria-label="Project record type"><button class="selected" data-record-section="updates" aria-pressed="true">Updates</button><button data-record-section="documents" aria-pressed="false">Documents</button></div><div id="record-content"></div>`;
   const render = () => {
     document.querySelectorAll("[data-record-section]").forEach((b) => {
       const selected = b.dataset.recordSection === section;
@@ -794,68 +610,6 @@ function records() {
       $("#record-search").addEventListener("input", draw);
       $("#record-area").addEventListener("change", draw);
       draw();
-    } else {
-      const groups = [
-        ["brand", "Brand standards", data.baseline.brandStandards, "Area"],
-        ["assets", "Proof assets", data.baseline.proofAssets, "Asset / Hook"],
-        ["research", "Research sources", data.baseline.research, "Source"],
-        ["guide", "Operating guide", data.baseline.systemGuide, "Topic"],
-        [
-          "budget",
-          "Budget baseline",
-          data.baseline.budgetRows,
-          "Budget Setting",
-        ],
-      ];
-      content.innerHTML = `<section class="baseline-intro"><div><div class="eyebrow">MIGRATED WORKBOOK</div><h2>Pre-launch baseline</h2><p>All 12 workbook sheets, formulas and validation lists are preserved here. Live task and gate decisions remain in Pre Launch.</p></div><span>${esc(data.baseline.sourceSha256.slice(0, 12))}…</span></section><div class="toolbar"><select id="baseline-group" aria-label="Choose baseline area">${groups.map(([id, name]) => `<option value="${id}">${name}</option>`).join("")}<option value="templates">Feedback templates</option><option value="archive">Full workbook archive</option></select><input id="baseline-search" type="search" placeholder="Search baseline…" aria-label="Search baseline"></div><div id="baseline-results"></div>`;
-      const draw = () => {
-        const group = $("#baseline-group").value,
-          q = $("#baseline-search").value.toLowerCase(),
-          target = $("#baseline-results");
-        if (group === "templates") {
-          const templates = [
-            ["Feedback users", data.baseline.feedbackUsers],
-            ["Feedback and issues", data.baseline.feedbackIssues],
-          ];
-          target.innerHTML = `<div class="baseline-grid">${templates.map(([name, item]) => `<article class="baseline-card"><h3>${name}</h3><p>${item.records.length} preserved template rows</p><dl>${item.headers.map((header) => `<div><dt>Field</dt><dd>${esc(header)}</dd></div>`).join("")}</dl></article>`).join("")}</div>`;
-          return;
-        }
-        if (group === "archive") {
-          const sheets = data.baseline.rawSheets;
-          target.innerHTML = `<div class="toolbar"><select id="baseline-sheet" aria-label="Choose original workbook sheet">${sheets.map((sheet) => `<option>${esc(sheet.name)}</option>`).join("")}</select></div><div id="baseline-sheet-table"></div>`;
-          const drawSheet = () => {
-            const sheet = sheets.find(
-                (item) => item.name === $("#baseline-sheet").value,
-              ),
-              rows = sheet.rows.filter((row) =>
-                row.some((value) => value !== null && value !== ""),
-              ),
-              width = Math.max(
-                ...rows.map((row) =>
-                  row.reduce(
-                    (last, value, index) =>
-                      value !== null && value !== "" ? index + 1 : last,
-                    0,
-                  ),
-                ),
-              ),
-              visible = rows.map((row) => row.slice(0, width));
-            $("#baseline-sheet-table").innerHTML =
-              `<div class="status-count">${esc(sheet.name)} · ${esc(sheet.range)} · ${sheet.validations.length} validation rules</div><div class="panel table-wrap baseline-archive"><table><tbody>${visible.map((row) => `<tr>${row.map((value) => `<td>${esc(value ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
-          };
-          $("#baseline-sheet").addEventListener("change", drawSheet);
-          drawSheet();
-          return;
-        }
-        const selected = groups.find((item) => item[0] === group),
-          records = selected[2].filter((record) =>
-            JSON.stringify(record).toLowerCase().includes(q),
-          );
-        target.innerHTML = `<div class="status-count">${records.length} records</div><div class="baseline-grid">${records.map((record) => baselineCard(record, selected[3])).join("") || '<p class="empty">No matching baseline records.</p>'}</div>`;
-      };
-      $("#baseline-group").addEventListener("change", draw);
-      $("#baseline-search").addEventListener("input", draw);
-      draw();
     }
   };
   document.querySelectorAll("[data-record-section]").forEach((b) =>
@@ -893,24 +647,10 @@ async function loadSharedDashboardState() {
           item?.status,
         )
       ) {
-        adminState.taskOverrides[id] =
-          task.lifecycle === "PRE_LAUNCH" && item.status === "BLOCKED"
-            ? "IN PROGRESS"
-            : item.status;
+        adminState.taskOverrides[id] = item.status;
         const taskText = unpackTaskText(item.note);
         adminState.taskNotes[id] = taskText.note;
-        if (task.lifecycle !== "PRE_LAUNCH")
           adminState.taskBlockers[id] = taskText.blockedReason;
-      }
-    }
-    for (const [id, item] of Object.entries(shared?.gates || {})) {
-      if (
-        data.gates.some((g) => g.id === id) &&
-        ["WAIT", "PASS", "FAIL"].includes(item?.status)
-      ) {
-        adminState.gateOverrides[id] = item.status;
-        adminState.gateNotes[id] =
-          typeof item.note === "string" ? item.note : "";
       }
     }
     noteSyncStatus = "Shared across devices";
@@ -932,8 +672,6 @@ async function saveSharedTask(id, status, note, blocker) {
     !["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].includes(status)
   )
     throw new Error("Invalid task update");
-  if (task.lifecycle === "PRE_LAUNCH" && status === "BLOCKED")
-    throw new Error("Pre-Launch tasks are independently available; use In progress instead.");
   if (status === "COMPLETE" && !note)
     throw new Error(
       "Add completion evidence before marking this task complete.",
@@ -941,7 +679,7 @@ async function saveSharedTask(id, status, note, blocker) {
   if (status === "BLOCKED" && !blocker)
     throw new Error("Add the blocking reason before saving this task.");
   const packedText =
-    task.lifecycle === "PRE_LAUNCH" ? note : packTaskText(note, blocker);
+    packTaskText(note, blocker);
   if (packedText.length > 1000)
     throw new Error("Note or evidence must be 1000 characters or fewer.");
   await patchSharedDashboard({
@@ -953,36 +691,22 @@ async function saveSharedTask(id, status, note, blocker) {
   });
   adminState.taskOverrides[id] = status;
   adminState.taskNotes[id] = note;
-  if (task.lifecycle !== "PRE_LAUNCH") adminState.taskBlockers[id] = blocker;
-  await saveAdminState();
-}
-async function saveSharedGate(id, status, note) {
-  if (
-    !data.gates.some((g) => g.id === id) ||
-    !["WAIT", "PASS", "FAIL"].includes(status)
-  )
-    throw new Error("Invalid readiness update");
-  if (["PASS", "FAIL"].includes(status) && !note)
-    throw new Error("Add an evidence or decision note first.");
-  await patchSharedDashboard({
-    [`gates/${id}`]: { status, note, updatedAt: new Date().toISOString() },
-  });
-  adminState.gateOverrides[id] = status;
-  adminState.gateNotes[id] = note;
+  adminState.taskBlockers[id] = blocker;
   await saveAdminState();
 }
 function navigate() {
   if (!data) return;
   const requested = location.hash.slice(1) || "overview",
     redirects = {
-      readiness: "plan",
-      admin: "plan",
+      readiness: "growth",
+      admin: "growth",
+      plan: "growth",
       updates: "records",
       library: "records",
     };
   view = redirects[requested] || requested;
   if (!titles[view]) view = "overview";
-  if (view === "growth" && requested === "growth") growthTab = "home";
+  if (view === "growth") growthTab = "home";
   if (requested !== view) history.replaceState(null, "", `#${view}`);
   $("#crumb").textContent = titles[view];
   document.querySelectorAll("[data-view]").forEach((a) => {
@@ -990,7 +714,7 @@ function navigate() {
     if (a.dataset.view === view) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  ({ overview, plan, growth, records, support })[view]();
+  ({ overview, growth, records, support })[view]();
   window.scrollTo(0, 0);
 }
 
@@ -1177,21 +901,11 @@ async function loadAdminState() {
     taskOverrides: { ...(base.taskOverrides || {}) },
     taskNotes: { ...(base.taskNotes || {}) },
     taskBlockers: { ...(base.taskBlockers || {}) },
-    gateOverrides: { ...(base.gateOverrides || {}) },
-    gateNotes: { ...(base.gateNotes || {}) },
     project: { ...(base.project || {}) },
     updates: [...(base.updates || [])],
   };
-  const normalizePrelaunchTaskState = () => {
-    data.tasks.filter((task) => task.lifecycle === "PRE_LAUNCH").forEach((task) => {
-      if (adminState.taskOverrides[task.id] === "BLOCKED")
-        adminState.taskOverrides[task.id] = "IN PROGRESS";
-      delete adminState.taskBlockers[task.id];
-    });
-  };
   const saved = localStorage.getItem(localKey);
   if (!saved) {
-    normalizePrelaunchTaskState();
     return;
   }
   try {
@@ -1215,18 +929,13 @@ async function loadAdminState() {
       Object.assign(adminState.taskNotes, local.taskNotes);
     if (local.taskBlockers && typeof local.taskBlockers === "object")
       Object.assign(adminState.taskBlockers, local.taskBlockers);
-    if (local.gateOverrides && typeof local.gateOverrides === "object")
-      Object.assign(adminState.gateOverrides, local.gateOverrides);
-    if (local.gateNotes && typeof local.gateNotes === "object")
-      Object.assign(adminState.gateNotes, local.gateNotes);
-    if (local.project && typeof local.project === "object")
-      Object.assign(adminState.project, local.project);
-    if (Array.isArray(local.updates) && local.updates.length)
-      adminState.updates = local.updates;
   } catch {
     localStorage.removeItem(localKey);
   }
-  normalizePrelaunchTaskState();
+  for (const key of ["taskOverrides", "taskNotes", "taskBlockers"]) {
+    adminState[key] = Object.fromEntries(Object.entries(adminState[key]).filter(([id]) => data.tasks.some(t => t.id === id)));
+  }
+  adminState.project = { ...base.project };
 }
 async function saveAdminState() {
   const salt = crypto.getRandomValues(new Uint8Array(16)),
@@ -1360,19 +1069,6 @@ async function autoSaveTask(row) {
     saveStatus.textContent = error.message;
   }
 }
-async function autoSaveGate(container) {
-  const id = container.dataset.gateId,
-    status = container.querySelector("[data-gate-status]").value,
-    note = container.querySelector("[data-gate-note]").value.trim(),
-    saveStatus = container.querySelector(".save-status");
-  saveStatus.textContent = "Saving…";
-  try {
-    await saveSharedGate(id, status, note);
-    saveStatus.textContent = "Saved";
-  } catch (error) {
-    saveStatus.textContent = error.message;
-  }
-}
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
@@ -1408,19 +1104,7 @@ document.addEventListener("click", async (e) => {
     return;
   }
   if (b.hasAttribute("data-project-notepad")) { $("#admin-note")?.focus(); $("#admin-note")?.scrollIntoView({block:"center", behavior:"smooth"}); return; }
-  if (b.dataset.prelaunchTab) {
-    prelaunchTab = b.dataset.prelaunchTab;
-    if (prelaunchTab === "records") planTaskView = "all";
-    plan();
-    return;
-  }
   if (b.dataset.go) location.hash = b.dataset.go;
-  if (b.dataset.planScope) {
-    planTaskView = b.dataset.planScope;
-    prelaunchTab = "records";
-    if (view === "plan") plan();
-    else location.hash = "plan";
-  }
   if (b.dataset.doc) doc(b.dataset.doc);
   if (b.dataset.taskDetail) {
     const row = b.closest("[data-task-row]"),
@@ -1445,7 +1129,6 @@ document.addEventListener("click", async (e) => {
       status.textContent = error.message;
     }
   }
-  if (b.dataset.gateGroup) showGates(b.dataset.gateGroup);
   if (b.dataset.phase) {
     const p = data.phases.find((p) => p.id === b.dataset.phase);
     openDetail(
@@ -1489,16 +1172,9 @@ document.addEventListener("input", (e) => {
     debounceSave(`task:${row.dataset.taskRow}`, () => autoSaveTask(row));
     return;
   }
-  const gate = e.target.closest("[data-gate-id]");
-  if (gate && e.target.matches("[data-gate-note]")) {
-    gate.querySelector(".save-status").textContent = "Saving…";
-    debounceSave(`gate:${gate.dataset.gateId}`, () => autoSaveGate(gate));
-  }
+
 });
 document.addEventListener("change", (e) => {
-  const gate = e.target.closest("[data-gate-id]");
-  if (gate && e.target.matches("[data-gate-status]"))
-    debounceSave(`gate:${gate.dataset.gateId}`, () => autoSaveGate(gate), 0);
 });
 $("#unlock-form").addEventListener("submit", (e) => {
   e.preventDefault();
