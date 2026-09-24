@@ -418,6 +418,21 @@ const taskTypeBadge = (t, compact = false) => {
 };
 const criticalBadge = (t, compact = false) => t.lifecycle === "GROWTH" ? taskTypeBadge(t, compact) : "";
 const taskTypeSummary = () => "";
+function aiPriorityList(tasks) {
+  const priorities = data.growthSystem.aiPriorities;
+  if (!priorities) return "";
+  const rows = priorities.items.map(item => {
+    const task = tasks.find(t => t.id === item.taskId);
+    if (!task) return "";
+    return `<button class="ai-priority-task" data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}"><span class="ai-priority-rank">${item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><span>${esc(growthTaskSummary(task))}</span></span><small>${esc(label(taskStatus(task)))}</small></button>`;
+  });
+  return growthPanel(esc(priorities.title), `<p>${esc(priorities.summary)}</p><div class="ai-priority-list">${rows.slice(0,5).join("")}</div>${growthMore("Seven more tasks for the next opportunity", `<div class="ai-priority-list">${rows.slice(5).join("")}</div>`)}<p class="subtle">Ranked by expected value and current evidence. Results are still untested.</p><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button>`);
+}
+function aiPriorityDetail(t) {
+  const item = data.growthSystem.aiPriorities?.items.find(item => item.taskId === t.id);
+  if (!item) return "";
+  return `<div class="ai-priority-detail"><p><strong>Priority ${item.rank} · Why now:</strong> ${esc(item.reason)}</p><p><strong>AI will produce:</strong> ${esc(t.execution.output)}</p><p><strong>Estimated effort:</strong> ${esc(item.effort)}</p>${growthMore("How we’ll judge this task", `<p>${esc(item.measure)}</p><p><strong>Confidence:</strong> ${esc(item.confidence)}</p><p><strong>Done means:</strong> ${esc(t.execution.verify)}</p><p>Completing this preparation does not mean a campaign was delivered or produced growth.</p>`)}<p><strong>Reused by:</strong> ${t.execution.relatedTasks.map(id => {const related = data.tasks.find(task => task.id === id); return `<button class="text-btn" data-task-detail="${esc(id)}">${esc(related ? growthTaskTitle(related) : id)}</button>`;}).join(" · ")}</p></div>`;
+}
 function oneTimeTaskList(tasks) {
   const button = t => `<button class="growth-simple-task ${growthTaskType(t) === "RECURRING" ? "recurring-simple-task" : "one-time-simple-task"}" data-task-detail="${esc(t.id)}" data-growth-searchable="${esc(`${t.id} ${growthTaskTitle(t)} ${growthTaskSummary(t)}`.toLowerCase())}"><span class="growth-simple-task-copy">${taskTypeBadge(t, true)}${esc(growthTaskTitle(t))}</span><small>${esc(label(taskStatus(t)))}</small></button>`;
   const matching = tasks.filter(t => growthTaskType(t) === "ONE_TIME").sort((a, b) => a.sourceRow - b.sourceRow);
@@ -432,7 +447,7 @@ const growthMore = (title, body, extra = "") => `<details class="growth-more ${e
 function growthTaskDetail(t, currentNote = "", currentBlocker = "") {
   const packet = data.growthSystem.approvals.find(p => p.status === "READY" && p.taskIds.includes(t.id));
   const note = currentNote || adminState.taskNotes?.[t.id] || t.evidence;
-  openDetail("AI TASK", growthTaskTitle(t), `<div class="growth-simple-detail">${tag(taskStatus(t))}${taskTypeBadge(t)}<p class="growth-lead">${esc(growthTaskSummary(t))}</p>${taskStatus(t) === "BLOCKED" ? `<p><strong>What is holding this up:</strong> ${esc(currentBlocker || blockedReason(t))}</p>` : ""}<h3>Your part</h3>${packet ? `<h4>Admin steps</h4>${taskAdminSteps(t)}` : '<p>None now. AI handles the preparation and asks when a decision is ready.</p>'}<button class="quiet" data-growth-brief="${esc(t.id)}">Copy instructions for Codex</button><p class="subtle">Paste into Codex to request this task. Copying does not start it.</p>${growthMore("Latest task note", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${growthMore("Full AI instructions", `<p class="subtle">${esc(t.id)}</p>${growthRecipe(t)}<h3>Success looks like</h3><p>${esc(t.success)}</p>`)}</div>`);
+  openDetail("AI TASK", growthTaskTitle(t), `<div class="growth-simple-detail">${tag(taskStatus(t))}${taskTypeBadge(t)}<p class="growth-lead">${esc(growthTaskSummary(t))}</p>${aiPriorityDetail(t)}${taskStatus(t) === "BLOCKED" ? `<p><strong>What is holding this up:</strong> ${esc(currentBlocker || blockedReason(t))}</p>` : ""}<h3>Your part</h3>${packet ? `<h4>Admin steps</h4>${taskAdminSteps(t)}` : '<p>None now. AI handles the preparation and asks when a decision is ready.</p>'}<button class="quiet" data-growth-brief="${esc(t.id)}">Copy instructions for Codex</button><p class="subtle">Paste into Codex to request this task. Copying does not start it.</p>${growthMore("Latest task note", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${growthMore("Full AI instructions", `<p class="subtle">${esc(t.id)}</p>${growthRecipe(t)}<h3>Success looks like</h3><p>${esc(t.success)}</p>`)}</div>`);
 }
 function growthRecipe(t) {
   const r = t.execution;
@@ -442,7 +457,7 @@ function growthRecipe(t) {
 function growthBrief(id) {
   const t = data.tasks.find(t => t.id === id);
   const r = data.growthSystem?.routines.find(r => r.id === id);
-  const taskText = t?.execution ? `${t.id}: ${t.title}. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
+  const taskText = t?.execution ? `${t.id}: ${t.title}. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Business measure: ${t.execution.successMeasure || t.success}. Reuse through: ${(t.execution.relatedTasks || []).join(", ") || "the existing Growth routines"}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
   return `Work only in the Reaction Creator Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. ${taskText} Select useful Growth work within existing authority. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
 }
 function growthPanel(title, body, extra = "") {
@@ -540,6 +555,7 @@ function growth() {
     body += `<div class="growth-simple-footer"><p>${esc(automation)} AI’s daily and weekly routines are ready to use.</p><button class="text-btn" data-growth-tab="work">See what AI will do →</button></div>`;
   } else if (growthTab === "work") {
     body = `<div class="growth-intro"><h2>AI handles the ongoing work</h2><p>Research, prepare, carry out approved work, and record the results.</p><p class="subtle">${esc(automation)}</p></div>${taskTypeSummary(tasks)}<div class="growth-routines">${simple.routines.map(r => growthPanel(esc(r.title), `<p>${esc(r.summary)}</p>${routineTaskList(tasks, r.id)}${growthMore("See the steps",`<ol>${r.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol><button class="quiet" data-growth-brief="${esc(r.id)}">Copy ${esc(r.id)} instructions</button><p class="subtle">Paste into Codex to request this routine. Copying does not start it.</p>${growthMore("Detailed run instructions", `<ol>${g.routines.find(full=>full.id===r.id).steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol>${docButton("01_STRATEGY/GROWTH_EXECUTION.md","Full operating guide")}`)}`)}`)).join("")}</div>`;
+    body = aiPriorityList(tasks) + body;
     const oneTimeCount = tasks.filter(t => growthTaskType(t) === "ONE_TIME").length;
     body += growthMore(`Browse ${oneTimeCount} One Time AI tasks`, `<p class="subtle">Recurring tasks are listed above in Every day, Every week and Every month.</p><label class="growth-search-label">Find a one-time task<input id="growth-task-search" type="search" placeholder="Try website, partners or ads"></label>${oneTimeTaskList(tasks)}<p id="growth-search-empty" hidden>No matching tasks.</p><button class="text-btn" data-growth-tab="tasks">Edit detailed task records →</button>`);
     body += growthMore("Recent AI activity", receipts);

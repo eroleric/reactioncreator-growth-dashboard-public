@@ -3629,3 +3629,20 @@ nav a.active {
 }
 
 .overview-calm .overview-workspaces { grid-template-columns: minmax(0, 1fr); }
+
+/* A short ranked starting set; the rest stays available on demand. */
+.ai-priority-list { display:grid; gap:10px; margin:18px 0; }
+.ai-priority-task { display:grid; grid-template-columns:34px minmax(0,1fr) auto; gap:14px; align-items:center; width:100%; text-align:left; border:1px solid #e0e8e5; border-radius:14px; padding:16px; color:#25394c; background:linear-gradient(110deg,#f3faf6,#fff 70%); cursor:pointer; }
+.ai-priority-task:hover { border-color:#78aa98; background:#f0f8f4; }
+.ai-priority-task:focus-visible { outline:3px solid #7b67b2; outline-offset:3px; }
+.ai-priority-rank { display:grid; place-items:center; width:32px; height:32px; border-radius:10px; background:#dfefe7; color:#366c59; font-weight:700; }
+.ai-priority-copy { display:grid; gap:5px; min-width:0; }
+.ai-priority-copy strong { font-size:14px; line-height:1.5; }
+.ai-priority-copy > span { font-size:12px; line-height:1.6; color:#627184; }
+.ai-priority-task > small { font-size:10px; white-space:nowrap; color:#68778a; }
+.ai-priority-detail { padding:8px 0; }
+@media(max-width:700px) {
+  .ai-priority-task { grid-template-columns:28px minmax(0,1fr); gap:10px; padding:13px; }
+  .ai-priority-rank { width:27px; height:27px; }
+  .ai-priority-task > small { grid-column:2; }
+}
