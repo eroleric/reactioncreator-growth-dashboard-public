@@ -3222,6 +3222,71 @@ nav a.active {
   .roadmap-detail footer { flex-direction: column; gap: 6px; padding: 13px 19px; }
 }
 
+/* A quiet milestone path; supporting strategy opens on demand. */
+.roadmap-intro {
+  padding: 28px 8px 18px;
+  border: 0;
+  background: transparent;
+}
+.roadmap-intro h2 { font-size: clamp(25px, 3vw, 34px); letter-spacing: -.9px; }
+.roadmap-intro p { margin-bottom: 0; }
+.roadmap-progress { background: #edf6f3; border: 0; padding: 18px 22px; }
+.roadmap-progress strong { font-size: 20px; color: #246654; }
+.roadmap-progress span { color: #506c63; }
+.roadmap-track { gap: 0; margin: 22px 0 26px; }
+.roadmap-track::before { top: 22px; height: 2px; background: #dcdce8; }
+.roadmap-step {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 12px; min-height: 144px; padding: 4px 8px 12px;
+  border: 0; border-radius: 12px; text-align: center;
+  background: transparent; box-shadow: none;
+}
+.roadmap-step:hover { background: #f0edf8; box-shadow: none; }
+.roadmap-step.selected { background: transparent; box-shadow: none; }
+.roadmap-step-marker { width: 38px; height: 38px; border-width: 5px; background: #eef0f5; box-shadow: 0 0 0 1px #dcdce8; font-size: 13px; }
+.roadmap-step-copy { margin: 0; padding: 7px 10px; border-radius: 10px; }
+.roadmap-step.selected .roadmap-step-copy { background: #ede7fa; }
+.roadmap-step-copy small { font-size: 10px; color: #596378; }
+.roadmap-step-copy strong { font-size: 23px; }
+.roadmap-step-copy strong span { display: none; }
+.roadmap-step-copy em { font-size: 12px; color: #536077; margin-top: 3px; }
+.roadmap-detail { border-color: #e0dcea; box-shadow: 0 8px 28px #39305008; }
+.roadmap-detail-head { padding: 26px 28px 18px; border-bottom: 0; background: linear-gradient(110deg, #f7f4fd, #fff 80%); }
+.roadmap-detail-head h2 { font-size: 28px; }
+.roadmap-detail-head p { max-width: 620px; margin-bottom: 0; font-size: 15px; }
+.roadmap-focus { padding: 8px 28px 28px; }
+.roadmap-focus h3 { margin: 0 0 14px; font-size: 13px; font-weight: 650; color: #637087; }
+.roadmap-focus ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; list-style: none; margin: 0; padding: 0; }
+.roadmap-focus li { padding: 20px; border: 1px solid #e5e7ef; border-radius: 13px; background: #fafbfe; }
+.roadmap-focus li > span { display: grid; place-items: center; width: 36px; height: 36px; margin-bottom: 14px; border-radius: 10px; background: #eee8fa; color: #675098; font-size: 24px; }
+.roadmap-focus li:nth-child(2) > span { background: #e3f2ed; color: #276d59; }
+.roadmap-focus li:nth-child(3) > span { background: #f9eddb; color: #88622e; }
+.roadmap-focus li strong { display: block; max-width: 25ch; color: #34405a; font-size: 15px; line-height: 1.5; font-weight: 600; }
+.roadmap-more { border-top: 1px solid #e7eaf0; }
+.roadmap-more > summary { padding: 19px 28px; cursor: pointer; color: #43516a; font-size: 14px; font-weight: 600; }
+.roadmap-more > summary span { float: right; color: #677389; font-size: 12px; font-weight: 400; }
+.roadmap-more > summary:hover { background: #f7f8fc; }
+.roadmap-step:focus-visible, .roadmap-more > summary:focus-visible { outline: 3px solid #7661aa; outline-offset: 3px; }
+@media (max-width: 800px) {
+  .roadmap-intro { padding: 12px 0; gap: 16px; }
+  .roadmap-progress { padding: 14px 18px; }
+  .roadmap-track { margin: 16px 0 20px; }
+  .roadmap-step { padding: 4px 2px; min-height: 112px; gap: 7px; }
+  .roadmap-step-copy { padding: 6px; }
+  .roadmap-step-copy strong { font-size: 20px; }
+  .roadmap-step-copy small { font-size: 10px; }
+  .roadmap-step-marker { width: 36px; height: 36px; font-size: 12px; }
+  .roadmap-detail-head { padding: 20px 20px 14px; gap: 12px; }
+  .roadmap-detail-head h2 { font-size: 25px; }
+  .roadmap-focus { padding: 8px 20px 20px; }
+  .roadmap-focus ol { grid-template-columns: 1fr; gap: 9px; }
+  .roadmap-focus li { display: flex; align-items: center; gap: 14px; padding: 14px; }
+  .roadmap-focus li > span { flex-shrink: 0; margin: 0; }
+  .roadmap-focus li strong { max-width: none; font-size: 14px; }
+  .roadmap-more > summary { padding: 18px 20px; line-height: 1.5; }
+  .roadmap-more > summary span { display: none; }
+}
+
 /* Recurring and one-time Growth work */
 .task-type-badge {
   display: inline-flex;
