@@ -3631,6 +3631,51 @@ nav a.active {
 .overview-calm .overview-workspaces { grid-template-columns: minmax(0, 1fr); }
 
 /* A short ranked starting set; the rest stays available on demand. */
+.expected-results-workspace { max-width:1120px; }
+.expected-results-intro { color:#607086; line-height:1.65; margin:4px 0; }
+.expected-results-empty { padding:28px; max-width:760px; background:linear-gradient(120deg,#f3faf7,#fff); }
+.expected-results-empty h2 { font-size:21px; margin:0 0 14px; }
+.expected-results-empty p { line-height:1.7; color:#596c7d; margin:12px 0; }
+.expected-results-empty button { margin:12px 12px 0 0; }
+.expected-results-toolbar { display:flex; gap:18px; align-items:end; flex-wrap:wrap; margin:8px 0; }
+.expected-results-toolbar > p { margin-right:auto; color:#526577; }
+.expected-results-toolbar label { display:grid; gap:7px; font-size:12px; color:#586d7b; }
+.expected-results-toolbar input { min-width:240px; }
+.expected-results-toolbar input, .expected-results-toolbar select { border:1px solid #dce4e7; background:#fff; border-radius:9px; padding:10px 12px; color:#30485c; font:inherit; font-size:13px; min-height:40px; }
+.expected-result-card { margin-bottom:18px; overflow:hidden; }
+.expected-result-card > summary { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px; cursor:pointer; list-style:revert; background:linear-gradient(120deg,#f2f8f5,#fbfaff); }
+.expected-result-card > summary strong { display:block; font-size:16px; line-height:1.5; }
+.expected-result-card > summary small { display:block; color:#637287; font-size:11px; margin-top:7px; }
+.expected-card-meta { display:grid; gap:8px; flex-shrink:0; text-align:right; font-size:13px; }
+.expected-result-body { padding:22px 24px; overflow-wrap:anywhere; }
+.expected-result-body h3 { margin:24px 0 10px; font-size:14px; color:#283d54; }
+.expected-result-body p { font-size:13px; line-height:1.75; margin:8px 0; }
+.expected-result-body .expected-result-disclaimer { margin:0 0 20px; font-size:12px; color:#6b647b; background:#f6f3fa; padding:12px 14px; border-radius:10px; }
+.expected-result-facts { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+.expected-first-time { color:#336b59; font-size:23px; }
+.expected-confidence { display:inline-block; width:fit-content; border-radius:20px; padding:5px 10px; font-size:11px; color:#6d571e; background:#fff3d3; }
+.expected-confidence.medium { color:#52617f; background:#eaf0fa; }
+.expected-confidence.high { color:#2b6d54; background:#e5f3eb; }
+.expected-timeline { list-style:none; margin:16px 0; padding:0; border:1px solid #e0e8e5; border-radius:12px; overflow:hidden; }
+.expected-timeline > li { display:grid; grid-template-columns:110px minmax(0,1fr); gap:18px; padding:16px; background:#fbfdfc; }
+.expected-timeline > li + li { border-top:1px solid #e0e8e5; }
+.expected-timeline > li > strong { font-size:12px; color:#356956; padding-top:4px; }
+.expected-timeline p { margin:0 0 5px; }
+.expected-timeline .expected-period-impact { color:#66758a; font-size:12px; }
+.expected-assumptions { padding-left:20px; line-height:1.8; font-size:13px; }
+.expected-range { font-weight:600; color:#356956; }
+.expected-open-task { margin:0 24px 24px; }
+.task-expected-results { margin:24px 0; border:1px solid #e0e8e5; border-radius:12px; }
+.task-expected-results > h3 { margin:0; padding:16px 22px; background:#eff8f3; border-radius:12px 12px 0 0; }
+@media(max-width:700px) {
+  .expected-results-toolbar { align-items:stretch; flex-direction:column; }
+  .expected-results-toolbar input { min-width:0; width:100%; }
+  .expected-result-card > summary { padding:18px; align-items:start; flex-direction:column; gap:14px; }
+  .expected-card-meta { text-align:left; display:flex; align-items:center; flex-wrap:wrap; }
+  .expected-result-body { padding:18px; }
+  .expected-result-facts { grid-template-columns:1fr; gap:0; }
+  .expected-timeline > li { grid-template-columns:1fr; gap:5px; padding:13px; }
+}
 .ai-priority-list { display:grid; gap:10px; margin:18px 0; }
 .ai-priority-task { display:grid; grid-template-columns:34px minmax(0,1fr) auto; gap:14px; align-items:center; width:100%; text-align:left; border:1px solid #e0e8e5; border-radius:14px; padding:16px; color:#25394c; background:linear-gradient(110deg,#f3faf6,#fff 70%); cursor:pointer; }
 .ai-priority-task:hover { border-color:#78aa98; background:#f0f8f4; }
