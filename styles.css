@@ -2707,8 +2707,8 @@ button.overview-next-task:focus-visible {
 .growth-plain-lessons li { margin-bottom:10px; }
 @media(max-width:800px) { .growth-goal { flex-direction:column; padding:24px; gap:16px; } .growth-goal h2 { font-size:27px; } .growth-simple-footer { align-items:flex-start; flex-direction:column; gap:10px; } .growth-summary-stats { grid-template-columns:1fr; gap:10px; } .growth-summary-stats .stat { display:grid; grid-template-columns:1fr auto; gap:4px 10px; padding:18px; } .growth-summary-stats .stat .label { align-self:center; } .growth-summary-stats .stat .number { font-size:25px; margin:0; } .growth-summary-stats .stat .note { grid-column:1 / -1; } .growth-more > summary { padding:16px; } .growth-more-body { padding:16px; } .growth-simple-task { align-items:flex-start; } .growth-simple-milestones article { grid-template-columns:40px 1fr; } .growth-simple-milestones article .text-btn { grid-column:2; justify-self:start; } }
 @media(max-width:800px) {
-  .growth-tabs { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:3px; overflow:visible; }
-  .growth-tabs button { padding:10px 3px; font-size:12px; }
+  .growth-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px; overflow:visible; }
+  .growth-tabs button { padding:10px 8px; font-size:12px; white-space:normal; }
   .growth-summary-stats .stat { min-height:0; }
 }
 
@@ -3789,3 +3789,11 @@ nav a.active {
   .ai-priority-rank { width:27px; height:27px; }
   .ai-priority-task > small { grid-column:2; }
 }
+
+.strategy-questions{margin:18px 0 24px;padding:20px;border:1px solid var(--line,#dce1e7);border-radius:16px;background:var(--surface,#fff)}
+.strategy-questions h3{margin:0 0 6px}.strategy-questions header p{margin:0 0 16px;color:var(--muted,#64748b)}
+.strategy-question-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.strategy-question-grid article{min-width:0;padding:14px;border-radius:12px;background:var(--bg,#f5f7fa)}
+.strategy-question-grid h4{margin:0;font-size:15px;line-height:1.5}.strategy-question-grid p{font-size:13px;line-height:1.5}
+.strategy-choices{display:flex;gap:8px}.strategy-choices button{min-width:66px;min-height:44px}.strategy-answer{font-weight:600;color:#176447}
+@media(max-width:720px){.strategy-question-grid{grid-template-columns:1fr}.strategy-questions{padding:16px}}

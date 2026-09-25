@@ -49,7 +49,7 @@ let data,
   activePin = "",
   failedAttempts = 0,
   planTaskView = "all",
-  growthTab = "home",
+  growthTab = "actions",
   sharedAdminActions = {},
   pendingAttention = null,
   adminState = {
@@ -408,7 +408,7 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  return `<nav class="growth-tabs" aria-label="Growth sections">${[["home","Focus"],["actions","Admin Actions"],["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
+  return `<nav class="growth-tabs" aria-label="Growth sections">${[["actions","Admin Actions"],["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
 }
 function expectedResultBody(result) {
   const range = result.expectedImpact.range;
@@ -437,7 +437,7 @@ function growthActions() {
   const actions = adminActionCandidates(), pending = submittedAdminActions(), archived = archivedAdminActions();
   const cards = actions.map(item => `<article class="panel growth-action-card"><div><small>${esc(item.id)}</small><h2>${esc(item.title)}</h2><p>${esc(item.trigger)}</p></div><button class="quiet" type="button" data-${item.kind}-action="${esc(item.id)}">Open Action →</button></article>`).join("");
   const archive = archived.length ? `<details class="admin-action-archive"><summary>Archive (${archived.length})</summary>${archived.map(item => `<article class="panel archived-action"><h3>${esc(item.title)}</h3><p>${esc(item.id)} · Resolved ${esc(item.submittedAt || "")}</p><button class="text-btn" type="button" data-archived-action="${esc(item.id)}">View record →</button></article>`).join("")}</details>` : "";
-  $("#main").innerHTML = head("Admin Actions", "Only essential decisions or hands-on steps appear here.") + growthNavigation() + `<div class="growth-workspace growth-simple"><section class="growth-action-list" aria-label="Active Admin Actions">${cards || '<div class="panel empty">Nothing needs your attention right now.</div>'}</section>${pending.length ? `<p class="admin-processing">${pending.length} submitted ${pending.length === 1 ? "resolution is" : "resolutions are"} waiting for AI to record the outcome.</p>` : ""}${archive}</div>`;
+  $("#main").innerHTML = head("Admin Actions", "Only essential decisions or hands-on steps appear here.") + growthNavigation() + `<div class="growth-workspace growth-simple"><section class="growth-action-list" aria-label="Active Admin Actions">${cards || '<div class="panel empty">Nothing needs your attention right now.</div>'}</section>${pending.length ? `<p class="admin-processing">${pending.length} submitted ${pending.length === 1 ? "resolution is" : "resolutions are"} waiting for AI to record the outcome.</p>` : ""}${archive}${sharedProjectNotepad("Admin Actions")}</div>`;
 }
 const growthTaskTitle = t => t.execution?.adminTitle || t.title;
 const growthTaskSummary = t => t.execution?.adminSummary || t.success;
@@ -498,7 +498,7 @@ function growthBrief(id) {
   const t = data.tasks.find(t => t.id === id);
   const r = data.growthSystem?.routines.find(r => r.id === id);
   const taskText = t?.execution ? `${t.id}: ${t.title}. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Business measure: ${t.execution.successMeasure || t.success}. Reuse through: ${(t.execution.relatedTasks || []).join(", ") || "the existing Growth routines"}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
-  return `Work only in the Reaction Creator Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. ${taskText} ${t?.execution?.executionContract ? `Execution contract: ${JSON.stringify(t.execution.executionContract)}.` : `Preflight each routine candidate using its executionContract; skip absent triggers without completing a task.`} Read executionPolicy.commonRead and update applicable commonUpdate files plus the contract updateFiles. Artifact prerequisites hold only the dependent stage; verify actual dated outputs, not completion checkboxes. Select useful Growth work within existing authority. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. When completing a task or recurring cycle, follow the Expected Task Results completion rule in GROWTH_EXECUTION.md: review the automatic estimate and record an evidence-specific forecast in the private brain with expected outcome, first-result days and timing anchor, Day 1/3/7/14/30 impacts, confidence and assumptions. Numerical ranges require a documented basis; preparation alone is not acquisition. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
+  return `Work only in the Reaction Creator Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. ${taskText} ${t?.execution?.executionContract ? `Execution contract: ${JSON.stringify(t.execution.executionContract)}.` : `Preflight each routine candidate using its executionContract; skip absent triggers without completing a task.`} Before any task or routine, run node dashboard/scripts/admin-actions.mjs pending and process strategy answers under the Strategy question intake procedure in GROWTH_EXECUTION.md. Reconcile tasks and replace processed questions before choosing work. Read executionPolicy.commonRead and update applicable commonUpdate files plus the contract updateFiles. Artifact prerequisites hold only the dependent stage; verify actual dated outputs, not completion checkboxes. Select useful Growth work within existing authority. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. When completing a task or recurring cycle, follow the Expected Task Results completion rule in GROWTH_EXECUTION.md: review the automatic estimate and record an evidence-specific forecast in the private brain with expected outcome, first-result days and timing anchor, Day 1/3/7/14/30 impacts, confidence and assumptions. Numerical ranges require a documented basis; preparation alone is not acquisition. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
 }
 function growthPanel(title, body, extra = "") {
   return `<section class="panel growth-panel"><div class="panel-head"><h2>${title}</h2>${extra}</div><div class="panel-body">${body}</div></section>`;
@@ -570,36 +570,26 @@ function growth() {
   if (growthTab === "expected") return growthExpectedResults();
   if (growthTab === "tasks") return plan(true);
   if (growthTab === "rhythm") growthTab = "work";
-  if (growthTab !== "home" && !["work", "strategy", "roadmap"].includes(growthTab)) growthTab = "home";
+  if (!["work", "strategy", "roadmap"].includes(growthTab)) { growthTab = "actions"; return growthActions(); }
   const simple = g.adminView;
   if (!simple) { $("#main").innerHTML = head("Growth", "Refresh to load the simplified growth plan."); return; }
   const tasks = data.tasks.filter(t => t.lifecycle === "GROWTH");
 
   const actions = adminActionCandidates();
-  const next = tasks.find(t => t.id === g.focus.nextTask && taskAvailable(t)) || tasks.find(taskAvailable);
   const docButton = (path, title) => `<button class="text-btn" data-doc="${esc(path)}">${esc(title)} ↗</button>`;
-  const adminContent = actions.length ? actions.map(item => `<article class="growth-decision"><h3>${esc(item.title)}</h3><p>${esc(item.trigger)}</p><button class="quiet" type="button" data-open-${item.kind}="${esc(item.id)}">Open Action →</button></article>`).join("") : '<p class="growth-none">Nothing needed from you.</p><p>AI will ask when a decision or access is needed.</p>';
-  const nextContent = next ? `<h3>${esc(growthTaskTitle(next))}</h3><p>${esc(growthTaskSummary(next))}</p><button class="quiet" data-task-detail="${esc(next.id)}">View task</button>` : '<p>No unfinished AI task is available.</p>';
   const automation = g.scheduler.status === "NOT_SCHEDULED" ? "Automatic runs are not set up yet." : `Automatic runs: ${g.scheduler.status}.`;
   const receipts = g.runs.length ? `<ul>${g.runs.slice(-5).reverse().map(r => `<li><strong>${esc(growthTaskTitle(tasks.find(t=>t.id===r.taskId) || {title:r.taskId}))}</strong> · ${esc(r.status)}<p>${esc(r.evidence || r.output || "No result recorded")}</p></li>`).join("")}</ul>` : '<p>No growth runs recorded yet.</p>';
   let body = "";
-  if (growthTab === "home") {
-    const count = Number(metric("Total active subscribers").value);
-    const target = g.milestones.find(m => !Number.isFinite(count) || m.target > count)?.target;
-    body = `<section class="growth-goal"><div><small>OUR NEXT GOAL</small><h2>${target ? `${target} paying subscribers` : "Choose the next subscriber goal"}</h2><p>${esc(simple.planSummary)}</p></div><span class="tag neutral">Growth</span></section>`;
-    body += `<div class="growth-grid">${growthPanel("AI’s next task", nextContent)}${growthPanel(actions.length ? "Admin Action needed" : "Admin Actions",adminContent)}</div>`;
-    body += sharedProjectNotepad("Growth & budget");
-    body += `<div class="growth-simple-footer"><p>${esc(automation)} AI’s daily and weekly routines are ready to use. Results and budget balances are kept in Overview.</p><button class="text-btn" data-growth-tab="work">See what AI will do →</button></div>`;
-  } else if (growthTab === "work") {
+  if (growthTab === "work") {
     body = `<div class="growth-intro"><h2>AI handles the ongoing work</h2><p>Research, prepare, carry out approved work, and record the results.</p><p class="subtle">${esc(automation)}</p></div>${taskTypeSummary(tasks)}<div class="growth-routines">${simple.routines.map(r => growthPanel(esc(r.title), `<p>${esc(r.summary)}</p>${routineTaskList(tasks, r.id)}${growthMore("See the steps",`<ol>${r.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol><button class="quiet" data-growth-brief="${esc(r.id)}">Copy ${esc(r.id)} instructions</button><p class="subtle">Paste into Codex to request this routine. Copying does not start it.</p>${growthMore("Detailed run instructions", `<ol>${g.routines.find(full=>full.id===r.id).steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol>${docButton("01_STRATEGY/GROWTH_EXECUTION.md","Full operating guide")}`)}`)}`)).join("")}</div>`;
     body = aiPriorityList(tasks) + body;
     const oneTimeCount = tasks.filter(t => growthTaskType(t) === "ONE_TIME").length;
     body += growthMore(`Browse ${oneTimeCount} One Time AI tasks`, `<p class="subtle">Recurring tasks are listed above in Every day, Every week and Every month.</p><label class="growth-search-label">Find a one-time task<input id="growth-task-search" type="search" placeholder="Try website, partners or ads"></label>${oneTimeTaskList(tasks)}<p id="growth-search-empty" hidden>No matching tasks.</p><button class="text-btn" data-growth-tab="tasks">Edit detailed task records →</button>`);
     body += growthMore("Recent AI activity", receipts);
-    if (actions.length) body = growthPanel("Admin Action needed",adminContent) + body;
   } else if (growthTab === "strategy") {
     body = growthStrengthRadar(tasks);
     body += `<div class="growth-intro"><h2>How we’ll grow</h2><p>${esc(simple.planSummary)} AI adjusts the plan as results come in.</p></div>`;
+    body += strategyQuestionsPanel();
     body += growthPanel("The growth plan", `<p class="subtle">These areas can move forward together. Open any area to see its tasks.</p><div class="growth-simple-phases">${simple.phases.map(w=>growthMore(`<span class="growth-phase-name">${esc(w.title)}</span><span class="growth-phase-description">${esc(w.summary)}</span>`, `<ul class="growth-task-links">${tasks.filter(t=>t.phaseId===w.id).map(t=>`<li><button class="text-btn" data-task-detail="${esc(t.id)}">${criticalBadge(t, true)}${esc(growthTaskTitle(t))}</button></li>`).join("")}</ul>`)).join("")}</div>`);
     body += growthMore("Our goals: 5 → 10 → 25 → 50 → 100 subscribers", `<div class="growth-simple-milestones">${simple.milestones.map(m=>`<article><strong>${m.target}</strong><span>${esc(m.summary)}</span><button class="text-btn" data-growth-milestone="${m.target}">Details</button></article>`).join("")}</div><p class="subtle">These are goals, not forecasts. AI checks customer results before expanding.</p>`);
     body += growthMore("Where we’ll find customers", `<div class="growth-channel-list">${g.channels.map(c=>`<article><h3>${esc(c.name)}</h3><p>${esc(c.strategy)}</p>${growthMore("How AI checks results",`<p>${esc(c.measure)}</p>${docButton(c.record,"Open results")}`)}</article>`).join("")}</div>`);
@@ -716,8 +706,40 @@ function archivedActionDetail(id) {
   const item = sharedAdminActions[id];
   if (!item || item.status !== "ARCHIVED") return;
   const original = (() => { try { return JSON.parse(item.original); } catch { return {}; } })();
-  const steps = original.kind === "decision" ? original.item?.adminSteps?.join("\n") : original.item?.action;
+  const steps = original.kind === "decision" ? original.item?.adminSteps?.join("\n") : original.item?.action || original.item?.question;
   openDetail(`ADMIN ACTION ARCHIVE · ${esc(id)}`, item.title, `<div class="owner-action-detail"><h3>Original action</h3><p>${esc(steps || "No original steps recorded")}</p><p><strong>Why / trigger:</strong> ${esc(original.item?.why || original.item?.trigger || "Not recorded")}</p><h3>Admin resolution</h3><p>${esc(item.resolution)}</p><h3>Outcome</h3><p>${esc(item.outcome)}</p><h3>Learned and recorded</h3><p>${esc(item.learned)}</p><p><strong>Brain records:</strong> ${esc(item.recordedIn)}</p></div>`);
+}
+function strategyQuestionsPanel() {
+  const questions = data.growthSystem.strategyQuestions?.active || [];
+  if (!questions.length) return "";
+  return `<section class="strategy-questions" aria-labelledby="strategy-questions-title"><header><h3 id="strategy-questions-title">Help shape the next tasks</h3><p>Three quick decisions. Your answers guide the next AI run, which updates the tasks and brings back the next critical questions.</p></header><div class="strategy-question-grid">${questions.map(q => {
+    const saved = sharedAdminActions[q.id];
+    return `<article data-strategy-question="${esc(q.id)}"><h4>${esc(q.question)}</h4><p>${esc(q.why)}</p>${saved ? `<p class="strategy-answer" role="status">${saved.resolution === "YES" ? "Yes" : saved.resolution === "NO" ? "No" : "Answer saved"} · ${saved.status === "ARCHIVED" ? "Reviewed. Refresh snapshot for the next question." : "Saved for the next AI run"}</p>` : `<div class="strategy-choices" role="group" aria-label="${esc(q.question)}"><button class="quiet" data-strategy-answer="YES" data-question-id="${esc(q.id)}">Yes</button><button class="quiet" data-strategy-answer="NO" data-question-id="${esc(q.id)}">No</button></div><p role="status" class="subtle strategy-save-status"></p>`}</article>`;
+  }).join("")}</div><p class="subtle">Answer any that you’re ready for. These choices guide planning; specific sends, publication and spending still need their own approval.</p></section>`;
+}
+async function submitStrategyAnswer(button) {
+  const id = button.dataset.questionId, value = button.dataset.strategyAnswer;
+  const item = data.growthSystem.strategyQuestions.active.find(q => q.id === id);
+  if (!item || !["YES", "NO"].includes(value) || sharedAdminActions[id]) return;
+  const card = button.closest("[data-strategy-question]");
+  const status = card.querySelector("[role=status]");
+  card.querySelectorAll("button").forEach(b => b.disabled = true);
+  status.textContent = "Saving…";
+  try {
+    const url = `https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(id)}.json`;
+    const current = await fetch(url, {headers:{"X-Firebase-ETag":"true"},cache:"no-store"});
+    if (!current.ok) throw new Error("Could not check saved answers. Try again.");
+    const existing = await current.json();
+    if (existing) { sharedAdminActions[id] = existing; growth(); return; }
+    const record = {id, title:item.question, status:"RESOLVED", original:JSON.stringify({kind:"strategy",item}), resolution:value, submittedAt:new Date().toISOString()};
+    const response = await fetch(url, {method:"PUT",headers:{"Content-Type":"application/json","If-Match":current.headers.get("ETag") || "null_etag"},body:JSON.stringify(record)});
+    if (!response.ok) throw new Error(response.status === 412 ? "Another device answered this question. Refresh to see it." : "Answer was not saved. Please try again.");
+    sharedAdminActions[id] = record;
+    growth();
+  } catch (error) {
+    status.textContent = error.message;
+    card.querySelectorAll("button").forEach(b => b.disabled = false);
+  }
 }
 async function submitActionResolution(form) {
   const id = form.dataset.actionId, kind = form.dataset.kind;
@@ -1363,6 +1385,8 @@ onAuthStateChanged(supportAuth, async (user) => {
 });
 
 document.addEventListener("click", async (event) => {
+  const answer = event.target.closest("[data-strategy-answer]");
+  if (answer) { await submitStrategyAnswer(answer); return; }
   const tab = event.target.closest("[data-growth-tab]");
   if (tab) { growthTab = tab.dataset.growthTab; growth(); return; }
   const milestone = event.target.closest("[data-growth-milestone]");
