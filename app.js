@@ -52,6 +52,7 @@ let data,
   planTaskView = "all",
   growthTab = "work",
   sharedAdminActions = {},
+  sharedKnowledge = {},
   pendingAttention = null,
   adminState = {
     overviewNote: "",
@@ -264,8 +265,8 @@ function adminActionCandidates() {
     ...readyGrowthDecisions().map(item => ({ kind: "decision", id: item.id, title: item.decision, trigger: item.trigger, priority: 1 })),
   ].filter(item => !["RESOLVED", "ARCHIVED"].includes(sharedAdminActions[item.id]?.status)).sort((a, b) => a.priority - b.priority).slice(0, 2);
 }
-const submittedAdminActions = () => Object.values(sharedAdminActions).filter(item => item.status === "RESOLVED");
-const archivedAdminActions = () => Object.values(sharedAdminActions).filter(item => item.status === "ARCHIVED").sort((a, b) => (b.processedAt || "").localeCompare(a.processedAt || ""));
+const submittedAdminActions = () => Object.values(sharedAdminActions).filter(item => item.status === "RESOLVED" && !item.id.startsWith('SK-'));
+const archivedAdminActions = () => Object.values(sharedAdminActions).filter(item => item.status === "ARCHIVED" && !item.id.startsWith('SK-')).sort((a, b) => (b.processedAt || "").localeCompare(a.processedAt || ""));
 function actionResolutionForm(kind, id) {
   return `<form id="action-resolution" data-kind="${esc(kind)}" data-action-id="${esc(id)}"><h3>Action Resolution</h3><label for="action-resolution-text">What happened or what was the result?</label><textarea id="action-resolution-text" rows="4" maxlength="2000" required placeholder="Describe what you did, the result, or your decision."></textarea><p class="subtle">Do not enter passwords, codes, contact details, or other sensitive information.</p><button type="submit">Submit Resolution</button><p id="action-resolution-status" role="status" aria-live="polite"></p></form>`;
 }
@@ -501,7 +502,7 @@ function growthBrief(id) {
   const t = data.tasks.find(t => t.id === id);
   const r = data.growthSystem?.routines.find(r => r.id === id);
   const taskText = t?.execution ? `${t.id}: ${t.title}. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Business measure: ${t.execution.successMeasure || t.success}. Reuse through: ${(t.execution.relatedTasks || []).join(", ") || "the existing Growth routines"}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
-  return `Work only in the Reaction Creator Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. ${taskText} ${t?.execution?.executionContract ? `Execution contract: ${JSON.stringify(t.execution.executionContract)}.` : `Preflight each routine candidate using its executionContract; skip absent triggers without completing a task.`} Before any task or routine, run node dashboard/scripts/admin-actions.mjs pending and process strategy answers under the Strategy question intake procedure in GROWTH_EXECUTION.md. Reconcile tasks and replace processed questions before choosing work. Read executionPolicy.commonRead and update applicable commonUpdate files plus the contract updateFiles. Artifact prerequisites hold only the dependent stage; verify actual dated outputs, not completion checkboxes. Select useful Growth work within existing authority. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. When completing a task or recurring cycle, follow the Expected Task Results completion rule in GROWTH_EXECUTION.md: review the automatic estimate and record an evidence-specific forecast in the private brain with expected outcome, first-result days and timing anchor, Day 1/3/7/14/30 impacts, confidence and assumptions. Numerical ranges require a documented basis; preparation alone is not acquisition. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
+  return `Work only in the Reaction Creator Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. ${taskText} ${t?.execution?.executionContract ? `Execution contract: ${JSON.stringify(t.execution.executionContract)}.` : `Preflight each routine candidate using its executionContract; skip absent triggers without completing a task.`} Before any task or routine, run node dashboard/scripts/admin-actions.mjs pending and process strategy answers and approved Admin Strategy Knowledge under their intake procedures in GROWTH_EXECUTION.md. Reconcile tasks and replace processed questions before choosing work. Read executionPolicy.commonRead and update applicable commonUpdate files plus the contract updateFiles. Artifact prerequisites hold only the dependent stage; verify actual dated outputs, not completion checkboxes. Select useful Growth work within existing authority. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. When completing a task or recurring cycle, follow the Expected Task Results completion rule in GROWTH_EXECUTION.md: review the automatic estimate and record an evidence-specific forecast in the private brain with expected outcome, first-result days and timing anchor, Day 1/3/7/14/30 impacts, confidence and assumptions. Numerical ranges require a documented basis; preparation alone is not acquisition. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
 }
 function growthPanel(title, body, extra = "") {
   return `<section class="panel growth-panel"><div class="panel-head"><h2>${title}</h2>${extra}</div><div class="panel-body">${body}</div></section>`;
@@ -626,6 +627,8 @@ function growth() {
 
   }
   $("#main").innerHTML = head("Growth", "AI does the work. You see the progress and key decisions.",'<span class="tag neutral">Growth only</span>') + growthNavigation() + `<div class="growth-workspace growth-simple">${body}</div>`;
+  setupStrategyQuestionSlider();
+  setupKnowledgeSliders();
   const search = $("#growth-task-search");
   if (search) search.addEventListener("input", () => {
     const q=search.value.trim().toLowerCase();
@@ -720,13 +723,13 @@ function growthTimelinePanel() {
   const selected = plan.stages.find(s => s.id === growth.timelineStage) || plan.stages.find(s => s.id === plan.currentStage) || plan.stages[0];
   const channels = g.channels || [];
   const overview = data.growthSystem.strategyOverview;
-  const facts = (items, places = false) => `<dl class="strategy-facts${places ? ' strategy-places' : ''}">${items.map(item => `<div><dt>${item.label ? `<em>${esc(item.label)}</em> ` : ''}${esc(item.title)}</dt><dd>${esc(item.detail)}</dd></div>`).join('')}</dl>`;
+  const facts = (items, key, places = false) => `<div class="strategy-knowledge"><div class="strategy-knowledge-heading"><small>Approved / hardcoded strategy knowledge</small><div><span data-knowledge-position="${key}" aria-live="polite"></span><button type="button" data-knowledge-slide="previous" data-knowledge-key="${key}" aria-label="Previous ${key} strategies">←</button><button type="button" data-knowledge-slide="next" data-knowledge-key="${key}" aria-label="Next ${key} strategies">→</button></div></div><dl class="strategy-facts${places ? ' strategy-places' : ''}" data-knowledge-track="${key}" role="region" aria-label="Approved ${key} strategies">${items.map(item => `<div>${item.source === 'APPROVED_ADMIN' ? '<small class="knowledge-provenance">Approved Admin Knowledge</small>' : ''}<dt>${item.label ? `<em>${esc(item.label)}</em> ` : ''}${esc(item.title)}</dt><dd>${esc(item.detail)}</dd></div>`).join('')}</dl>${knowledgeAdminPanel(key)}</div>`;
   return `<section class="growth-timeline simple-timeline unified-growth" aria-labelledby="growth-timeline-title">
     <header><h2 id="growth-timeline-title">Growth Plan</h2><p class="strategy-plan-status">Organic pilot · still to be tested</p></header>
     <ol class="strategy-flow" aria-label="Growth strategy flow">
-      <li><h3><span>1</span> What we know</h3>${facts(overview.whatWeKnow)}</li>
-      <li><h3><span>2</span> Where customers are</h3>${facts(overview.whereCustomersAre, true)}</li>
-      <li><h3><span>3</span> How we reach them</h3>${facts(overview.howWeReachThem)}</li>
+      <li><h3><span>1</span> What we know</h3>${facts(overview.whatWeKnow, 'whatWeKnow')}</li>
+      <li><h3><span>2</span> Where customers are</h3>${facts(overview.whereCustomersAre, 'whereCustomersAre', true)}</li>
+      <li><h3><span>3</span> How we reach them</h3>${facts(overview.howWeReachThem, 'howWeReachThem')}</li>
       <li class="strategy-sequence"><div class="strategy-sequence-heading"><h3><span>4</span> What happens next</h3><span>Research + proof can start together</span></div>
       <div class="timeline-track" aria-label="Growth plan steps">${plan.stages.map((stage,i) => `<button class="timeline-stop ${stage.id === selected.id ? "selected" : ""}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="timeline-stage-detail"><span class="timeline-node">${i+1}</span><strong>${esc(stage.label)}</strong><span class="timeline-window">${esc(stage.window)}</span>${stage.id === plan.currentStage ? '<small>Start here</small>' : i === 1 ? '<small>Can start in parallel</small>' : ''}</button>`).join("")}</div>
       </li>
@@ -746,10 +749,74 @@ function taskTimelineContext(t) {
 }
 const strategyDrafts = new Map();
 const strategyNotices = new Map();
+let strategyQuestionStart = 0;
+function strategyQuestionVisibleCount() {
+  return window.matchMedia('(max-width: 600px)').matches ? 1 : window.matchMedia('(max-width: 900px)').matches ? 2 : 3;
+}
+function knowledgeAdminPanel(category) {
+  const entries = Object.values(sharedKnowledge).filter(item => item.category === category && item.status !== 'PROMOTED');
+  return `<details class="knowledge-admin" data-knowledge-category="${category}"><summary>Admin Strategy Knowledge <small>${entries.length ? `· ${entries.length} in review` : '· add or review'}</small></summary><div class="knowledge-admin-body"><p>New information stays outside the strategy brain until reviewed, approved and promoted by AI.</p><form data-knowledge-form="${category}"><label>Title <input name="title" maxlength="100" required></label><label>Knowledge or strategy <textarea name="detail" maxlength="240" required></textarea></label><label>Source or reason <textarea name="basis" maxlength="500" required></textarea></label><button class="quiet" type="submit">Add draft</button></form><div class="knowledge-list">${entries.map(item => `<article data-knowledge-item="${esc(item.id)}"><strong>${esc(item.title)}</strong><span>${esc(item.status.replaceAll('_',' '))}</span><p>${esc(item.detail)}</p><small>${esc(item.basis)}</small><div class="knowledge-actions">${['DRAFT','PENDING_REVIEW','REJECTED'].includes(item.status) ? `<button type="button" data-knowledge-action="edit" data-knowledge-id="${esc(item.id)}">Edit</button><button type="button" data-knowledge-action="delete" data-knowledge-id="${esc(item.id)}">Delete</button>` : ''}${['DRAFT','REJECTED'].includes(item.status) ? `<button type="button" data-knowledge-action="submit" data-knowledge-id="${esc(item.id)}">Submit for review</button>` : ''}${item.status === 'PENDING_REVIEW' ? `<button type="button" data-knowledge-action="review" data-knowledge-id="${esc(item.id)}">Mark reviewed</button><button type="button" data-knowledge-action="reject" data-knowledge-id="${esc(item.id)}">Reject</button>` : ''}${item.status === 'REVIEWED' ? `<button type="button" data-knowledge-action="approve" data-knowledge-id="${esc(item.id)}">Approve</button><button type="button" data-knowledge-action="reject" data-knowledge-id="${esc(item.id)}">Reject</button>` : ''}${item.status === 'APPROVED' ? '<small>Awaiting AI promotion into the permanent plan</small>' : ''}</div></article>`).join('')}</div><p class="knowledge-status" role="status"></p></div></details>`;
+}
+async function saveKnowledge(item, prior = null) {
+  const url = `https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(item.id)}.json`;
+  const current = await fetch(url, {headers:{'X-Firebase-ETag':'true'},cache:'no-store'});
+  if (!current.ok) throw new Error('Could not check the shared record.');
+  const actual = await current.json();
+  const actualItem = actual ? JSON.parse(actual.resolution) : null;
+  if (JSON.stringify(actualItem) !== JSON.stringify(prior)) throw new Error('This item changed elsewhere. Refresh and try again.');
+  const record = item.status === 'DELETED' ? null : {id:item.id,title:item.title,original:actual?.original || JSON.stringify({kind:'knowledge',category:item.category}),resolution:JSON.stringify(item),status:'RESOLVED',submittedAt:actual?.submittedAt || item.createdAt};
+  const response = await fetch(url, {method:item.status === 'DELETED' ? 'DELETE' : 'PUT',headers:{'Content-Type':'application/json','If-Match':current.headers.get('ETag') || 'null_etag'},body:record ? JSON.stringify(record) : undefined});
+  if (!response.ok) throw new Error(response.status === 412 ? 'This item changed elsewhere. Refresh and try again.' : 'Could not save the item.');
+  if (item.status === 'DELETED') {delete sharedKnowledge[item.id];delete sharedAdminActions[item.id];} else {sharedKnowledge[item.id] = item;sharedAdminActions[item.id] = record;}
+  growth();
+  const drawer = document.querySelector(`[data-knowledge-category="${item.category}"]`);
+  if (drawer) drawer.open = true;
+}
+function setupKnowledgeSliders() {
+  document.querySelectorAll('[data-knowledge-track]').forEach(track => {
+    const update = () => {
+      const cards = [...track.children];
+      if (!cards.length) return;
+      const step = cards[1] ? cards[1].offsetLeft - cards[0].offsetLeft : track.clientWidth;
+      const visible = Math.max(1, Math.round(track.clientWidth / step));
+      const start = Math.min(cards.length - 1, Math.round(track.scrollLeft / step));
+      const key = track.dataset.knowledgeTrack;
+      const position = document.querySelector(`[data-knowledge-position="${key}"]`);
+      if (position) position.textContent = `${start + 1}–${Math.min(cards.length, start + visible)} of ${cards.length}`;
+      for (const button of document.querySelectorAll(`[data-knowledge-key="${key}"]`)) button.disabled = button.dataset.knowledgeSlide === 'previous' ? start === 0 : start + visible >= cards.length;
+    };
+    track.addEventListener('scroll', update, {passive:true});
+    update();
+  });
+}
+function updateStrategyQuestionSlider() {
+  const grid = document.querySelector('.strategy-question-grid');
+  if (!grid) return;
+  const cards = [...grid.querySelectorAll('[data-strategy-question]')];
+  const visible = Math.min(strategyQuestionVisibleCount(), cards.length);
+  const step = cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 0;
+  strategyQuestionStart = Math.max(0, Math.min(cards.length - visible, step ? Math.round(grid.scrollLeft / step) : 0));
+  const position = document.querySelector('.strategy-question-position');
+  if (position) position.textContent = `${strategyQuestionStart + 1}–${strategyQuestionStart + visible} of ${cards.length}`;
+  const previous = document.querySelector('[data-strategy-slide="previous"]');
+  const next = document.querySelector('[data-strategy-slide="next"]');
+  if (previous) previous.disabled = strategyQuestionStart === 0;
+  if (next) next.disabled = strategyQuestionStart >= cards.length - visible;
+}
+function setupStrategyQuestionSlider() {
+  const grid = document.querySelector('.strategy-question-grid');
+  if (!grid) return;
+  const cards = [...grid.querySelectorAll('[data-strategy-question]')];
+  const visible = Math.min(strategyQuestionVisibleCount(), cards.length);
+  strategyQuestionStart = Math.min(strategyQuestionStart, cards.length - visible);
+  grid.scrollLeft = cards[strategyQuestionStart].offsetLeft - cards[0].offsetLeft;
+  grid.addEventListener('scroll', updateStrategyQuestionSlider, {passive:true});
+  updateStrategyQuestionSlider();
+}
 function strategyQuestionsPanel() {
   const questions = data.growthSystem.strategyQuestions?.active || [];
   if (!questions.length) return "";
-  return `<section class="strategy-questions" aria-labelledby="strategy-questions-title"><header><h3 id="strategy-questions-title">Help shape the next tasks</h3><p>Answer what you can. AI reviews your choices on its next run.</p></header><div class="strategy-question-grid">${questions.map(q => {
+  return `<section class="strategy-questions" aria-labelledby="strategy-questions-title"><header><div><h3 id="strategy-questions-title">Help shape the next tasks</h3><p>Answer what you can. AI reviews your choices on its next run.</p></div><div class="strategy-question-controls"><span class="strategy-question-position" aria-live="polite"></span><button type="button" data-strategy-slide="previous" aria-label="Previous question">←</button><button type="button" data-strategy-slide="next" aria-label="Next question">→</button></div></header><div class="strategy-question-grid" role="region" aria-label="Strategy questions">${questions.map(q => {
     const saved = sharedAdminActions[q.id];
     let answer;
     if(saved) { try {answer=parseStrategyAnswer(saved.resolution);} catch {answer={answer:"Saved answer",comment:""};} }
@@ -846,6 +913,11 @@ async function loadSharedDashboardState() {
     if (!response.ok) throw new Error();
     const shared = await response.json();
     sharedAdminActions = Object.fromEntries(Object.entries(shared?.adminActions || {}).filter(([id, item]) => /^[A-Za-z0-9-]{1,40}$/.test(id) && ["RESOLVED", "ARCHIVED"].includes(item?.status)));
+    sharedKnowledge = Object.fromEntries(Object.entries(sharedAdminActions).flatMap(([id, action]) => {
+      if (!/^SK-[A-Za-z0-9-]{1,36}$/.test(id)) return [];
+      try { const original = JSON.parse(action.original), item = JSON.parse(action.resolution); return original.kind === 'knowledge' && item.id === id && ['DRAFT','PENDING_REVIEW','REVIEWED','APPROVED','REJECTED','PROMOTED'].includes(item.status) ? [[id,item]] : []; }
+      catch { return []; }
+    }));
     if (shared && typeof shared.overviewNote === "string")
       adminState.overviewNote = shared.overviewNote;
     for (const [id, item] of Object.entries(shared?.tasks || {})) {
@@ -1448,6 +1520,54 @@ onAuthStateChanged(supportAuth, async (user) => {
 });
 
 document.addEventListener("click", async (event) => {
+  const knowledgeAction = event.target.closest('[data-knowledge-action]');
+  if (knowledgeAction) {
+    const prior = sharedKnowledge[knowledgeAction.dataset.knowledgeId];
+    if (!prior) return;
+    const action = knowledgeAction.dataset.knowledgeAction;
+    let next = {...prior, updatedAt:new Date().toISOString()};
+    if (action === 'edit') {
+      const title = prompt('Strategy title', prior.title);
+      if (title === null) return;
+      const detail = prompt('Knowledge or strategy', prior.detail);
+      if (detail === null) return;
+      const basis = prompt('Source or reason', prior.basis);
+      if (basis === null) return;
+      if (!title.trim() || !detail.trim() || !basis.trim() || title.length > 100 || detail.length > 240 || basis.length > 500) { alert('Enter a title, knowledge and source within the field limits.'); return; }
+      next = {...next,title:title.trim(),detail:detail.trim(),basis:basis.trim(),status:'DRAFT'};
+    } else if (action === 'delete') {
+      if (!confirm('Delete this unapproved knowledge item?')) return;
+      next.status = 'DELETED';
+    } else {
+      next.status = {submit:'PENDING_REVIEW',review:'REVIEWED',approve:'APPROVED',reject:'REJECTED'}[action];
+      if (!next.status) return;
+      if (action === 'approve' && !confirm('Approve this reviewed item for AI promotion into the permanent strategy?')) return;
+    }
+    knowledgeAction.disabled = true;
+    try { await saveKnowledge(next, prior); }
+    catch (error) { knowledgeAction.disabled = false; const status = knowledgeAction.closest('.knowledge-admin').querySelector('.knowledge-status'); status.textContent = error.message; }
+    return;
+  }
+  const knowledgeSlide = event.target.closest('[data-knowledge-slide]');
+  if (knowledgeSlide) {
+    const track = document.querySelector(`[data-knowledge-track="${knowledgeSlide.dataset.knowledgeKey}"]`);
+    const cards = [...track.querySelectorAll(':scope > div')];
+    const visible = Math.max(1, Math.round(track.clientWidth / (cards[0]?.getBoundingClientRect().width || track.clientWidth)));
+    const current = Math.round(track.scrollLeft / ((cards[1]?.offsetLeft || 0) - (cards[0]?.offsetLeft || 0) || track.clientWidth));
+    const next = Math.max(0, Math.min(cards.length - visible, current + (knowledgeSlide.dataset.knowledgeSlide === 'next' ? visible : -visible)));
+    track.scrollTo({left: cards[next].offsetLeft - cards[0].offsetLeft, behavior:'smooth'});
+    return;
+  }
+  const slider = event.target.closest('[data-strategy-slide]');
+  if (slider) {
+    const grid = document.querySelector('.strategy-question-grid');
+    const cards = [...grid.querySelectorAll('[data-strategy-question]')];
+    const visible = Math.min(strategyQuestionVisibleCount(), cards.length);
+    const direction = slider.dataset.strategySlide === 'next' ? 1 : -1;
+    strategyQuestionStart = Math.max(0, Math.min(cards.length - visible, strategyQuestionStart + direction));
+    grid.scrollTo({left: cards[strategyQuestionStart].offsetLeft - cards[0].offsetLeft, behavior:'smooth'});
+    return;
+  }
   const timeline = event.target.closest("[data-timeline-stage], [data-open-timeline]");
   if (timeline) {
     growth.timelineStage = timeline.dataset.timelineStage || timeline.dataset.openTimeline;
@@ -1477,6 +1597,17 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("submit", async (event) => {
+  const knowledgeForm = event.target.closest('[data-knowledge-form]');
+  if (knowledgeForm) {
+    event.preventDefault();
+    const title = knowledgeForm.elements.title.value.trim(), detail = knowledgeForm.elements.detail.value.trim(), basis = knowledgeForm.elements.basis.value.trim();
+    if (!title || !detail || !basis) return;
+    const id = `SK-${crypto.randomUUID()}`;
+    const item = {id,category:knowledgeForm.dataset.knowledgeForm,title,detail,basis,status:'DRAFT',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+    const status = knowledgeForm.closest('.knowledge-admin').querySelector('.knowledge-status');
+    try { await saveKnowledge(item); } catch (error) { status.textContent = error.message; }
+    return;
+  }
   if (event.target?.id !== "action-resolution") return;
   event.preventDefault();
   await submitActionResolution(event.target);
