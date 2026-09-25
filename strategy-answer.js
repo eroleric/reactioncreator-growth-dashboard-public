@@ -12,3 +12,16 @@ export function encodeStrategyAnswer(answer, comment = '') {
   if (value.length > 2000) throw new Error('Please shorten your comment.');
   return value;
 }
+
+export function parseLearningAnswer(value) {
+  let result;
+  try { result = JSON.parse(value); } catch { throw new Error('Invalid learning answer'); }
+  if (!result || !['YES','NO','MOSTLY','NOT_SURE','LOW','MEDIUM','HIGH'].includes(result.value) || typeof result.comment !== 'string' || result.comment.length > 1000 || Object.keys(result).some(k => !['value','comment'].includes(k))) throw new Error('Invalid learning answer');
+  return {value:result.value, comment:result.comment.trim()};
+}
+export function encodeLearningAnswer(value, comment = '') {
+  const encoded = JSON.stringify({value, comment:comment.trim()});
+  parseLearningAnswer(encoded);
+  if (encoded.length > 2000) throw new Error('Please shorten your comment.');
+  return encoded;
+}

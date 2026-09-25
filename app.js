@@ -1,4 +1,4 @@
-import { parseStrategyAnswer, encodeStrategyAnswer } from "./strategy-answer.js?v=20260925-simple-1";
+import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeLearningAnswer } from "./strategy-answer.js?v=20260925-learning-1";
 import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
@@ -828,19 +828,19 @@ function setupStrategyQuestionSlider() {
   updateStrategyQuestionSlider();
 }
 function strategyQuestionsPanel() {
-  const questions = data.growthSystem.strategyQuestions?.active || [];
+  const questions = data.growthSystem.learningEngine?.active || data.growthSystem.strategyQuestions?.active || [];
   if (!questions.length) return "";
-  return `<section class="strategy-questions" aria-labelledby="strategy-questions-title"><header><div><h3 id="strategy-questions-title">Help shape the next tasks</h3><p>Answer what you can. AI reviews your choices on its next run.</p></div><div class="strategy-question-controls"><span class="strategy-question-position" aria-live="polite"></span><button type="button" data-strategy-slide="previous" aria-label="Previous question">←</button><button type="button" data-strategy-slide="next" aria-label="Next question">→</button></div></header><div class="strategy-question-grid" role="region" aria-label="Strategy questions">${questions.map(q => {
+  return `<section class="strategy-questions" aria-labelledby="strategy-questions-title"><header><div><h3 id="strategy-questions-title">Daily AI Questions</h3><p>5 quick questions to make the AI smarter. ${questions.filter(q=>sharedAdminActions[q.id]).length} / 5 answered today.</p></div><div class="strategy-question-controls"><span class="strategy-question-position" aria-live="polite"></span><button type="button" data-strategy-slide="previous" aria-label="Previous question">←</button><button type="button" data-strategy-slide="next" aria-label="Next question">→</button></div></header><div class="strategy-question-grid" role="region" aria-label="Daily AI questions">${questions.map(q => {
     const saved = sharedAdminActions[q.id];
     let answer;
-    if(saved) { try {answer=parseStrategyAnswer(saved.resolution);} catch {answer={answer:"Saved answer",comment:""};} }
+    if(saved) { try {answer=parseLearningAnswer(saved.resolution);} catch {answer={value:"Saved answer",comment:""};} }
     const draft = strategyDrafts.get(q.id) || {answer:'',comment:''};
-    return `<article data-strategy-question="${esc(q.id)}"><h4 id="question-${esc(q.id)}">${esc(q.question)}</h4>${saved ? `<p class="strategy-answer" role="status">${esc({YES:'Yes',NO:'No',OTHER:'Other'}[answer.answer] || answer.answer)} · ${saved.status === "ARCHIVED" ? "Reviewed" : "Saved for the next AI run"}</p>${answer.comment ? `<p class="strategy-saved-comment">${esc(answer.comment)}</p>` : ''}${saved.status === "RESOLVED" ? `<button class="text-btn" data-strategy-undo="${esc(q.id)}">Undo answer</button><p class="strategy-save-status subtle" role="status"></p>` : '<p class="subtle">Refresh for the next question. Reviewed answers can no longer be undone.</p>'}` : `<form data-strategy-form="${esc(q.id)}" aria-labelledby="question-${esc(q.id)}"><div class="strategy-choices" role="group" aria-label="Choose an answer">${['YES','NO','OTHER'].map(value=>`<label class="strategy-choice"><input type="radio" name="answer-${esc(q.id)}" value="${value}" ${draft.answer===value?'checked':''}><span>${{YES:'Yes',NO:'No',OTHER:'Other'}[value]}</span></label>`).join('')}</div><details class="strategy-comment" ${draft.comment ? 'open' : ''}><summary>Add a comment <span>(optional)</span></summary><label class="sr-only" for="comment-${esc(q.id)}">Optional comment</label><textarea id="comment-${esc(q.id)}" name="comment" rows="2" maxlength="1000" placeholder="Anything you’d like AI to consider…">${esc(draft.comment)}</textarea></details><button class="quiet strategy-save" type="submit" ${draft.answer?'':'disabled'}>Save answer</button><p role="status" class="subtle strategy-save-status">${esc(strategyNotices.get(q.id) || '')}</p></form>`}</article>`;
+    return `<article data-strategy-question="${esc(q.id)}"><h4 id="question-${esc(q.id)}">${esc(q.question)}</h4>${saved ? `<p class="strategy-answer" role="status">${esc(q.choices?.find(choice=>choice.value===answer.value)?.label || answer.value)} · ${saved.status === "ARCHIVED" ? "Added to the AI Brain" : "Saved for the next AI run"}</p>${answer.comment ? `<p class="strategy-saved-comment">${esc(answer.comment)}</p>` : ''}${saved.status === "RESOLVED" ? `<button class="text-btn" data-strategy-undo="${esc(q.id)}">Undo answer</button><p class="strategy-save-status subtle" role="status"></p>` : '<p class="subtle">Thanks — this answer now informs future questions.</p>'}` : `<form data-strategy-form="${esc(q.id)}" aria-labelledby="question-${esc(q.id)}"><div class="strategy-choices" role="group" aria-label="Choose an answer">${q.choices.map(choice=>`<label class="strategy-choice"><input type="radio" name="answer-${esc(q.id)}" value="${esc(choice.value)}" ${draft.answer===choice.value?'checked':''}><span>${esc(choice.label)}</span></label>`).join('')}</div><details class="strategy-comment" ${draft.comment ? 'open' : ''}><summary>Add a comment <span>(optional)</span></summary><label class="sr-only" for="comment-${esc(q.id)}">Optional comment</label><textarea id="comment-${esc(q.id)}" name="comment" rows="2" maxlength="1000" placeholder="Anything you’d like AI to consider…">${esc(draft.comment)}</textarea></details><button class="quiet strategy-save" type="submit" ${draft.answer?'':'disabled'}>Save answer</button><p role="status" class="subtle strategy-save-status">${esc(strategyNotices.get(q.id) || '')}</p></form>`}</article>`;
   }).join("")}</div></section>`;
 }
 async function submitStrategyAnswer(form) {
   const id = form.dataset.strategyForm;
-  const item = data.growthSystem.strategyQuestions.active.find(q => q.id === id);
+  const item = (data.growthSystem.learningEngine?.active || data.growthSystem.strategyQuestions.active).find(q => q.id === id);
   const choice = form.querySelector('input:checked')?.value;
   const comment = form.querySelector('textarea').value;
   if (!item || !choice || sharedAdminActions[id]) return;
@@ -849,13 +849,13 @@ async function submitStrategyAnswer(form) {
   controls.forEach(c => c.disabled=true);
   status.textContent='Saving…';
   try {
-    const resolution=encodeStrategyAnswer(choice,comment);
+    const resolution=encodeLearningAnswer(choice,comment);
     const url=`https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(id)}.json`;
     const current=await fetch(url,{headers:{'X-Firebase-ETag':'true'},cache:'no-store'});
     if(!current.ok) throw new Error('Could not check saved answers. Try again.');
     const existing=await current.json();
     if(existing) {sharedAdminActions[id]=existing;growth();return;}
-    const record={id,title:item.question,status:'RESOLVED',original:JSON.stringify({kind:'strategy',item}),resolution,submittedAt:new Date().toISOString()};
+    const record={id,title:item.question,status:'RESOLVED',original:JSON.stringify({kind:'learning',item}),resolution,submittedAt:new Date().toISOString()};
     const response=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':current.headers.get('ETag') || 'null_etag'},body:JSON.stringify(record)});
     if(!response.ok) throw new Error(response.status===412?'Another device changed this answer. Refresh to see it.':'Answer was not saved. Please try again.');
     sharedAdminActions[id]=record;
@@ -879,7 +879,7 @@ async function undoStrategyAnswer(button) {
       const response=await fetch(url,{method:'DELETE',headers:{'If-Match':current.headers.get('ETag') || 'null_etag'}});
       if(!response.ok) throw new Error(response.status===412?'The answer changed during undo. Refresh to see it.':'Could not undo. Your answer is still saved.');
     }
-    const previous=parseStrategyAnswer(saved.resolution);
+    const previous=parseLearningAnswer(saved.resolution);
     strategyDrafts.set(id,{answer:'',comment:previous.comment});
     strategyNotices.set(id,'Answer undone. Choose again when ready.');
     delete sharedAdminActions[id];growth();
