@@ -293,9 +293,10 @@ function openAttention(kind, id) {
   }
 }
 function overview() {
-  const subscribers = metric("Total active subscribers");
   const actions = adminActionCandidates();
   const attentionCount = actions.length;
+  const overviewMetricCard = (key, title, explanation = "") => growthMetricCard(key, title, explanation);
+  const overviewMetrics = `<section class="overview-metric-section" aria-labelledby="overview-metrics-title"><div class="overview-section-head"><div><div class="eyebrow">MEASUREMENT</div><h2 id="overview-metrics-title">Current results</h2><p>Each measure appears here once. Unknowns stay visible until a verified source is available.</p></div><button class="text-btn" type="button" data-doc="03_ANALYTICS/METRICS.md">Open measurement record ↗</button></div><section class="stats growth-stats growth-summary-stats overview-summary-stats" aria-label="Current Growth measures">${overviewMetricCard("Total active subscribers", "Paying subscribers")}${overviewMetricCard("MRR", "Monthly recurring revenue")}${overviewMetricCard("Activated users", "First video finished", "A successful saved export.")}${overviewMetricCard("Repeat export within 7 days", "Created again", "Another video on a later day within a week.")}${overviewMetricCard("Store visitors", "Store visitors")}${overviewMetricCard("Store install clicks", "Install clicks")}${overviewMetricCard("Completed acquisitions", "Completed acquisitions")}${overviewMetricCard("Successful exports", "Successful exports")}${`<article class="stat"><div class="label">Budget left</div><div class="number">${money(data.budget.remaining)}</div><div class="note">${money(data.budget.spent)} spent of ${money(data.budget.total)}</div></article>`}</section><p class="overview-metric-note">A click on Install is different from an actual install. Tests and free access do not count as paying customers. Repeat use is checked after a full week; paid conversion after two weeks.</p></section>`;
   const workspace = (lifecycle, name, description, status, destination, tone) => {
     const summary = taskStatusSummary(data.tasks.filter(t => t.lifecycle === lifecycle));
     const next = nextLifecycleTask(lifecycle);
@@ -310,8 +311,8 @@ function overview() {
     ...actions.map(item => `<article><span>Admin Action · ${esc(item.id)}</span><strong>${esc(item.title)}</strong><button class="text-btn" type="button" data-open-${item.kind}="${esc(item.id)}">Open Action →</button></article>`),
   ].join("");
   $("#main").innerHTML = `<div class="overview-calm">
-    <header class="overview-heading"><div><div class="eyebrow">YOUR PROJECT AT A GLANCE</div><h1>Overview</h1><p>Small steps toward your first 5 paying subscribers.</p></div><span class="overview-season">Growth</span></header>
-    <section class="overview-kpis" aria-label="Project at a glance">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Monthly recurring revenue", display(metric("MRR").value), esc(metric("MRR").asOf))}${stat("Budget left", money(data.budget.remaining), `${money(data.budget.spent)} spent · ${money(data.budget.total)} total`)}</section>
+    <header class="growth-goal overview-goal"><div><small>YOUR PROJECT AT A GLANCE</small><h1>Overview</h1><p>Small steps toward your first 5 paying subscribers.</p></div><span class="tag neutral">Growth</span></header>
+    ${overviewMetrics}
     <section class="overview-workspaces" aria-label="Growth workspace">${workspace("GROWTH", "Growth & budget", "Turn real usage into paying subscribers.", "Current scope", "growth", "growth")}</section>
     <section class="overview-attention ${attentionCount ? "has-actions" : "clear"}" aria-label="Admin attention">
       ${attentionCount ? `<details><summary><span class="overview-attention-icon" aria-hidden="true">!</span><span><strong>${attentionCount} ${attentionCount === 1 ? "Admin Action needs" : "Admin Actions need"} your attention</strong><small>Decisions, access, or hands-on help</small></span><span class="overview-expand">View items <span aria-hidden="true">⌄</span></span></summary><div class="overview-attention-list">${attentionItems}</div><div class="overview-attention-footer"><button class="text-btn" type="button" data-open-${actions[0].kind}="${esc(actions[0].id)}">Open Admin Actions →</button></div></details>` : '<strong>Nothing needs your attention right now.</strong>'}
@@ -407,7 +408,7 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  return `<nav class="growth-tabs" aria-label="Growth sections">${[["home","Summary"],["actions","Admin Actions"],["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["evidence","Results"],["expected","Expected Task Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
+  return `<nav class="growth-tabs" aria-label="Growth sections">${[["home","Focus"],["actions","Admin Actions"],["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
 }
 function expectedResultBody(result) {
   const range = result.expectedImpact.range;
@@ -506,9 +507,6 @@ function growthMetricCard(key, title, explanation = "") {
   const m = metric(key), unknown = m.value === "UNKNOWN";
   return `<article class="stat"><div class="label">${esc(title)}</div><div class="number ${unknown ? "growth-unknown" : ""}">${unknown ? "Not measured yet" : display(m.value)}</div><div class="note">${esc(unknown ? explanation : m.asOf)}</div></article>`;
 }
-function growthScorecard() {
-  return `<section class="stats growth-stats">${growthMetricCard("Total active subscribers","Paying subscribers")}${growthMetricCard("MRR","Monthly recurring revenue")}${growthMetricCard("Activated users","Users who finished a first video","A successful saved export.")}${growthMetricCard("Repeat export within 7 days","Users who created again","Another video on a later day within a week.")}</section>`;
-}
 const growthStrengthAxes = [
   { phaseId: "G-01", short: "Demand", title: "Demand generation" },
   { phaseId: "G-02", short: "Conversion", title: "Store & website conversion" },
@@ -572,6 +570,7 @@ function growth() {
   if (growthTab === "expected") return growthExpectedResults();
   if (growthTab === "tasks") return plan(true);
   if (growthTab === "rhythm") growthTab = "work";
+  if (growthTab !== "home" && !["work", "strategy", "roadmap"].includes(growthTab)) growthTab = "home";
   const simple = g.adminView;
   if (!simple) { $("#main").innerHTML = head("Growth", "Refresh to load the simplified growth plan."); return; }
   const tasks = data.tasks.filter(t => t.lifecycle === "GROWTH");
@@ -588,10 +587,9 @@ function growth() {
     const count = Number(metric("Total active subscribers").value);
     const target = g.milestones.find(m => !Number.isFinite(count) || m.target > count)?.target;
     body = `<section class="growth-goal"><div><small>OUR NEXT GOAL</small><h2>${target ? `${target} paying subscribers` : "Choose the next subscriber goal"}</h2><p>${esc(simple.planSummary)}</p></div><span class="tag neutral">Growth</span></section>`;
-    body += `<section class="stats growth-stats growth-summary-stats">${growthMetricCard("Total active subscribers","Paying subscribers")}${growthMetricCard("MRR","Monthly recurring revenue")}<article class="stat"><div class="label">Budget left</div><div class="number">${money(data.budget.remaining)}</div><div class="note">${money(data.budget.spent)} spent of ${money(data.budget.total)}</div></article></section>`;
     body += `<div class="growth-grid">${growthPanel("AI’s next task", nextContent)}${growthPanel(actions.length ? "Admin Action needed" : "Admin Actions",adminContent)}</div>`;
     body += sharedProjectNotepad("Growth & budget");
-    body += `<div class="growth-simple-footer"><p>${esc(automation)} AI’s daily and weekly routines are ready to use.</p><button class="text-btn" data-growth-tab="work">See what AI will do →</button></div>`;
+    body += `<div class="growth-simple-footer"><p>${esc(automation)} AI’s daily and weekly routines are ready to use. Results and budget balances are kept in Overview.</p><button class="text-btn" data-growth-tab="work">See what AI will do →</button></div>`;
   } else if (growthTab === "work") {
     body = `<div class="growth-intro"><h2>AI handles the ongoing work</h2><p>Research, prepare, carry out approved work, and record the results.</p><p class="subtle">${esc(automation)}</p></div>${taskTypeSummary(tasks)}<div class="growth-routines">${simple.routines.map(r => growthPanel(esc(r.title), `<p>${esc(r.summary)}</p>${routineTaskList(tasks, r.id)}${growthMore("See the steps",`<ol>${r.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol><button class="quiet" data-growth-brief="${esc(r.id)}">Copy ${esc(r.id)} instructions</button><p class="subtle">Paste into Codex to request this routine. Copying does not start it.</p>${growthMore("Detailed run instructions", `<ol>${g.routines.find(full=>full.id===r.id).steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol>${docButton("01_STRATEGY/GROWTH_EXECUTION.md","Full operating guide")}`)}`)}`)).join("")}</div>`;
     body = aiPriorityList(tasks) + body;
@@ -633,13 +631,6 @@ function growth() {
     const [summary, priorities] = summaries[selected.target] || [selected.outcome || selected.focus, selected.priorities || [selected.actions]];
     body = `<section class="roadmap-intro"><div><small>THE GROWTH JOURNEY</small><h2>One milestone at a time.</h2><p>Prove value before scaling reach.</p></div><div class="roadmap-progress"><strong>${esc(progressLabel)}</strong><span>${hasCount ? currentTarget ? `Next goal: ${currentTarget} paying subscribers` : "All planned milestones reached" : "Waiting for a verified baseline"}</span></div></section><section class="roadmap-track" aria-label="Choose a growth milestone">${roadmapStages}</section><article class="roadmap-detail ${selectedState}"><header class="roadmap-detail-head"><div><small>GOAL · ${selected.target} PAYING SUBSCRIBERS</small><h2>${esc(selected.name || selected.focus)}</h2><p>${esc(summary)}</p></div><span class="roadmap-status">${selectedStatus}</span></header><section class="roadmap-focus"><h3>Three priorities</h3><ol>${priorities.map((item, index) => `<li><span aria-hidden="true">${['◎', '↗', '◇'][index] || '•'}</span><strong>${esc(item)}</strong></li>`).join("")}</ol></section><details class="roadmap-more"><summary>How we know it’s working <span>Evidence &amp; strategy details</span></summary><div class="roadmap-detail-grid"><section><div class="roadmap-section-label"><strong>What AI concentrates on</strong></div><p>${esc(selected.outcome || selected.focus)}</p><ul>${(selected.priorities || [selected.actions]).map(item => `<li>${esc(item)}</li>`).join("")}</ul></section><section><div class="roadmap-section-label"><strong>Evidence for the next stage</strong></div><p>${esc(selected.evidence)}</p><div class="roadmap-next"><small>UP NEXT</small><span>${esc(selected.next)}</span></div></section></div><section class="roadmap-watch"><strong>Watch these signals</strong><div>${(selected.watch || []).map(item => `<span>${esc(item)}</span>`).join("")}</div></section><p class="roadmap-avoid"><strong>Protect the strategy:</strong> ${esc(selected.avoid || "Do not expand without real subscriber evidence.")}</p><footer><span>AI prepares and executes within existing authority.</span><span>Admin reviews ready public, pricing, partnership or spending decisions.</span></footer></details></article>`;
 
-  } else {
-    const b = data.budget;
-    body = `<div class="growth-intro"><h2>Are we making progress?</h2><p>We track paying customers and whether people finish videos and return.</p></div>` + growthScorecard();
-    body += `<div class="growth-grid">${growthPanel("Budget",`<div class="growth-budget"><strong>${money(b.remaining)}</strong><span>left from the ${money(b.total)} total budget</span></div><p>${money(b.spent)} spent · ${money(b.committed)} committed</p><p>Spending still needs your approval.</p><p><button class="text-btn" data-growth-tab="work">See Recurring and One Time tasks →</button></p>${growthMore("Planned budget and rules",`${b.allocations.filter(a=>a.amount>0).map(a=>`<div class="allocation"><span>${esc(a.label)}</span><strong>${money(a.amount)}</strong></div>`).join("")}<p>These amounts are plans, not permission to spend.</p>${docButton("09_BUDGET/BUDGET.md","Budget record")}`)}`)}${growthPanel("What’s working?", `<p>${g.experiments.length ? `${g.experiments.length} growth tests recorded.` : "No growth tests have started yet."}</p><p>AI will use results to decide what to keep, improve or stop.</p>${growthMore("Tests and campaign records", `${docButton("08_EXPERIMENTS/EXPERIMENT_BACKLOG.md","Planned tests")}${docButton("08_EXPERIMENTS/EXPERIMENT_LOG.md","Test results")}${docButton("07_CONTENT/CONTENT_RESULTS.csv","Content results")}${docButton("06_OUTREACH/OUTREACH_LOG.csv","Creator conversations")}`)}`)}</div>`;
-    body += growthMore("Where the numbers come from", `<p>A click on Install is different from an actual install. Tests and free access do not count as paying customers.</p><div class="growth-funnel">${[["Store visitors","Store visitors"],["Install clicks","Store install clicks"],["Completed acquisitions","Completed acquisitions"],["First video finished","Activated users"],["Created again","Repeat export within 7 days"],["Paying subscribers","Total active subscribers"]].map(([title,key])=>{const m=metric(key);return `<article><small>${esc(title)}</small><strong>${display(m.value)}</strong><span>${m.value==='UNKNOWN' ? 'Not measured yet' : esc(m.asOf)}</span></article>`}).join("")}</div><p>AI checks repeat use after a full week and paid conversion after two weeks. Unfinished observation periods stay pending.</p>${docButton("03_ANALYTICS/METRICS.md","Full measurement record")}`);
-    body += growthMore("Automatic runs and connected tools", `<p>${esc(automation)}</p><p>Last run: ${esc(g.scheduler.lastRun || "None recorded")} · Next run: ${esc(g.scheduler.nextRun || "Not scheduled")}</p><div class="growth-connections">${g.integrations.map(i=>`<article><h3>${esc(i.name)}</h3><p>${esc(i.status)}</p>${growthMore("Technical details",`<p>${esc(i.route)}</p>${docButton(i.source,"Source record")}`)}</article>`).join("")}</div>`);
-    body += growthMore("Recent AI activity", receipts);
   }
   $("#main").innerHTML = head("Growth", "AI does the work. You see the progress and key decisions.",'<span class="tag neutral">Growth only</span>') + growthNavigation() + `<div class="growth-workspace growth-simple">${body}</div>`;
   const search = $("#growth-task-search");

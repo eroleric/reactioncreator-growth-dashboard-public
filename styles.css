@@ -3707,6 +3707,27 @@ nav a.active {
 
 .overview-calm .overview-workspaces { grid-template-columns: minmax(0, 1fr); }
 
+/* Overview owns all displayed Growth metrics and uses the former Summary card language. */
+.overview-goal { margin:8px 0 28px; }
+.overview-goal h1 { font-size:30px; margin:9px 0; letter-spacing:-.6px; color:#163e35; }
+.overview-metric-section { margin-bottom:28px; }
+.overview-metric-section .overview-section-head { margin-bottom:14px; }
+.overview-metric-section .overview-section-head .text-btn { align-self:end; }
+.overview-calm .overview-summary-stats { grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; background:transparent; border:0; border-radius:0; padding:0; margin:0; }
+.overview-calm .overview-summary-stats .stat { display:block; min-height:144px; padding:20px; border:1px solid #e3e5ef; border-radius:14px; background:linear-gradient(115deg,#fff,#f8f7fc); box-shadow:0 5px 16px #28344e05; }
+.overview-calm .overview-summary-stats .stat + .stat { border-left:1px solid #e3e5ef; }
+.overview-calm .overview-summary-stats .stat .number { font-size:28px; margin:10px 0 6px; }
+.overview-calm .overview-summary-stats .stat .growth-unknown { font-size:18px!important; }
+.overview-metric-note { margin:14px 2px 0; color:#657087; font-size:12px; line-height:1.6; }
+@media(max-width:800px) {
+  .overview-goal h1 { font-size:27px; }
+  .overview-calm .overview-summary-stats { grid-template-columns:1fr; gap:10px; }
+  .overview-calm .overview-summary-stats .stat { display:grid; grid-template-columns:1fr auto; gap:4px 10px; padding:18px; }
+  .overview-calm .overview-summary-stats .stat .label { align-self:center; }
+  .overview-calm .overview-summary-stats .stat .number { grid-column:2; grid-row:1 / 3; margin:0; font-size:25px; }
+  .overview-calm .overview-summary-stats .stat .note { grid-column:1 / -1; }
+}
+
 /* A short ranked starting set; the rest stays available on demand. */
 .expected-results-workspace { max-width:1120px; }
 .expected-results-intro { color:#607086; line-height:1.65; margin:4px 0; }
