@@ -484,7 +484,7 @@ const growthMore = (title, body, extra = "") => `<details class="growth-more ${e
 function growthTaskDetail(t, currentNote = "", currentBlocker = "") {
   const packet = data.growthSystem.approvals.find(p => p.status === "READY" && p.taskIds.includes(t.id));
   const note = currentNote || adminState.taskNotes?.[t.id] || t.evidence;
-  openDetail("AI TASK", growthTaskTitle(t), `<div class="growth-simple-detail">${tag(taskStatus(t))}${taskTypeBadge(t)}<p class="growth-lead">${esc(growthTaskSummary(t))}</p>${aiPriorityDetail(t)}${expectedResultsForTask(t)}${taskStatus(t) === "BLOCKED" ? `<p><strong>What is holding this up:</strong> ${esc(currentBlocker || blockedReason(t))}</p>` : ""}<h3>Your part</h3>${packet ? `<h4>Admin steps</h4>${taskAdminSteps(t)}` : '<p>None now. AI handles the preparation and asks when a decision is ready.</p>'}<button class="quiet" data-growth-brief="${esc(t.id)}">Copy instructions for Codex</button><p class="subtle">Paste into Codex to request this task. Copying does not start it.</p>${growthMore("Latest task note", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${growthMore("Full AI instructions", `<p class="subtle">${esc(t.id)}</p>${growthRecipe(t)}<h3>Success looks like</h3><p>${esc(t.success)}</p>`)}</div>`);
+  openDetail("AI TASK", growthTaskTitle(t), `<div class="growth-simple-detail">${tag(taskStatus(t))}${taskTypeBadge(t)}<p class="growth-lead">${esc(growthTaskSummary(t))}</p>${taskTimelineContext(t)}${aiPriorityDetail(t)}${expectedResultsForTask(t)}${taskStatus(t) === "BLOCKED" ? `<p><strong>What is holding this up:</strong> ${esc(currentBlocker || blockedReason(t))}</p>` : ""}<h3>Your part</h3>${packet ? `<h4>Admin steps</h4>${taskAdminSteps(t)}` : '<p>None now. AI handles the preparation and asks when a decision is ready.</p>'}<button class="quiet" data-growth-brief="${esc(t.id)}">Copy instructions for Codex</button><p class="subtle">Paste into Codex to request this task. Copying does not start it.</p>${growthMore("Latest task note", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${growthMore("Full AI instructions", `<p class="subtle">${esc(t.id)}</p>${growthRecipe(t)}<h3>Success looks like</h3><p>${esc(t.success)}</p>`)}</div>`);
 }
 function growthContract(r) {
   const c=r.executionContract;
@@ -595,7 +595,7 @@ function growth() {
     body = growthStrengthRadar(tasks);
     body += `<div class="growth-intro"><h2>How we’ll grow</h2><p>${esc(simple.planSummary)} AI adjusts the plan as results come in.</p></div>`;
     body += strategyQuestionsPanel();
-    body += growthPanel("The growth plan", `<p class="subtle">These areas can move forward together. Open any area to see its tasks.</p><div class="growth-simple-phases">${simple.phases.map(w=>growthMore(`<span class="growth-phase-name">${esc(w.title)}</span><span class="growth-phase-description">${esc(w.summary)}</span>`, `<ul class="growth-task-links">${tasks.filter(t=>t.phaseId===w.id).map(t=>`<li><button class="text-btn" data-task-detail="${esc(t.id)}">${criticalBadge(t, true)}${esc(growthTaskTitle(t))}</button></li>`).join("")}</ul>`)).join("")}</div>`);
+    body += growthTimelinePanel();
     body += growthMore("Our goals: 5 → 10 → 25 → 50 → 100 subscribers", `<div class="growth-simple-milestones">${simple.milestones.map(m=>`<article><strong>${m.target}</strong><span>${esc(m.summary)}</span><button class="text-btn" data-growth-milestone="${m.target}">Details</button></article>`).join("")}</div><p class="subtle">These are goals, not forecasts. AI checks customer results before expanding.</p>`);
     body += growthMore("Where we’ll find customers", `<div class="growth-channel-list">${g.channels.map(c=>`<article><h3>${esc(c.name)}</h3><p>${esc(c.strategy)}</p>${growthMore("How AI checks results",`<p>${esc(c.measure)}</p>${docButton(c.record,"Open results")}`)}</article>`).join("")}</div>`);
     body += growthMore("What we’ve learned", `<ul class="growth-plain-lessons"><li>Count real paying customers. Views and clicks alone do not show growth.</li><li>Give new users time to try the app before judging results.</li><li>AI prepares the work; you only step in for decisions or access.</li><li>Automatic publishing must use a supported, authorized account.</li></ul>${docButton("02_RESEARCH/GROWTH_DASHBOARD_RESEARCH.md","Research and sources")}${docButton("08_EXPERIMENTS/LEARNINGS.md","All recorded lessons")}`);
@@ -713,6 +713,20 @@ function archivedActionDetail(id) {
   const original = (() => { try { return JSON.parse(item.original); } catch { return {}; } })();
   const steps = original.kind === "decision" ? original.item?.adminSteps?.join("\n") : original.item?.action || original.item?.question;
   openDetail(`ADMIN ACTION ARCHIVE · ${esc(id)}`, item.title, `<div class="owner-action-detail"><h3>Original action</h3><p>${esc(steps || "No original steps recorded")}</p><p><strong>Why / trigger:</strong> ${esc(original.item?.why || original.item?.trigger || "Not recorded")}</p><h3>Admin resolution</h3><p>${esc(item.resolution)}</p><h3>Outcome</h3><p>${esc(item.outcome)}</p><h3>Learned and recorded</h3><p>${esc(item.learned)}</p><p><strong>Brain records:</strong> ${esc(item.recordedIn)}</p></div>`);
+}
+function growthTimelinePanel() {
+  const plan = data.growthSystem.growthTimeline;
+  if (!plan?.stages?.length) return "";
+  const selected = plan.stages.find(s => s.id === growth.timelineStage) || plan.stages.find(s => s.id === plan.currentStage) || plan.stages[0];
+  const index = plan.stages.indexOf(selected);
+  const tasks = selected.taskIds.map(id => data.tasks.find(t => t.id === id)).filter(Boolean);
+  return `<section class="growth-timeline" aria-labelledby="growth-timeline-title"><header class="timeline-heading"><div><span class="timeline-kicker">THE GROWTH PLAN</span><h2 id="growth-timeline-title">From first conversation to paying creators.</h2><p>${esc(plan.summary)}</p></div><div class="timeline-goal"><span>OUR FIRST MILESTONE</span><strong>5 <small>paying subscribers</small></strong><span>A goal, not a promised result</span></div></header><div class="timeline-track" aria-label="Growth plan steps">${plan.stages.map((stage, i) => `<button class="timeline-stop ${stage.id === selected.id ? "selected" : ""}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="timeline-stage-detail"><span class="timeline-node">${String(i+1).padStart(2,"0")}</span><span class="timeline-stop-label">${esc(stage.eyebrow)}</span><strong>${esc(stage.label)}</strong><span class="timeline-window">${esc(stage.window)}</span>${stage.id === plan.currentStage ? '<span class="timeline-focus">Current focus</span>' : ''}</button>`).join("")}</div><article class="timeline-detail" id="timeline-stage-detail" aria-label="Selected growth step"><header><div><span class="timeline-kicker">STEP ${String(index+1).padStart(2,"0")} · ${esc(selected.eyebrow)}</span><h3>${esc(selected.title)}</h3><p>${esc(selected.outcome)}</p></div><div class="timeline-duration"><span>PLANNING WINDOW</span><strong>${esc(selected.window)}</strong></div></header><div class="timeline-detail-body"><section class="timeline-work"><h4>The work in this step</h4><div class="timeline-task-list">${tasks.map(t => `<button data-task-detail="${esc(t.id)}"><span class="timeline-task-icon" aria-hidden="true">↗</span><span><strong>${esc(growthTaskTitle(t))}</strong><small>${esc(label(taskStatus(t)))}</small></span><span aria-hidden="true">→</span></button>`).join("")}</div><div class="timeline-parallel"><span aria-hidden="true">⇄</span><p><strong>What can overlap</strong>${esc(selected.parallel)}</p></div></section><section class="timeline-conditions"><div><span class="timeline-condition-label">WHEN THIS STARTS</span><p>${esc(selected.start)}</p></div><div class="timeline-gate"><span class="timeline-condition-label">READY TO MOVE ON WHEN</span><p>${esc(selected.gate)}</p></div><div><span class="timeline-condition-label">WHAT THIS UNLOCKS</span><p>${esc(selected.next)}</p></div></section></div><footer><span>Step ${index+1} of ${plan.stages.length}</span><div>${index ? `<button class="quiet" data-timeline-stage="${esc(plan.stages[index-1].id)}">← Previous step</button>` : ''}${index < plan.stages.length-1 ? `<button class="timeline-next" data-timeline-stage="${esc(plan.stages[index+1].id)}">Explore next step →</button>` : `<button class="timeline-next" data-timeline-stage="${esc(plan.stages[0].id)}">Back to the first step ↻</button>`}</div></footer></article><p class="timeline-footnote">${esc(plan.timingNote)} The 7- and 14-day checks start at each creator’s first successful export.</p><div class="timeline-source"><span>AI-reviewed plan · ${esc(plan.reviewedAt)}</span><button class="text-btn" data-doc="01_STRATEGY/GROWTH_PLAN.md">Read the saved strategy ↗</button></div></section>`;
+}
+function taskTimelineContext(t) {
+  const plan = data.growthSystem.growthTimeline;
+  const stage = plan?.stages.find(s => s.taskIds.includes(t.id));
+  if (!stage) return "";
+  return `<aside class="task-timeline-context"><small>PLACE IN THE GROWTH PLAN · STEP ${plan.stages.indexOf(stage)+1}</small><strong>${esc(stage.label)}</strong><p>${esc(stage.window)} · ${esc(stage.start)}</p><p><b>Unlocks:</b> ${esc(stage.next)}</p><button class="text-btn" data-open-timeline="${esc(stage.id)}">See this step in the timeline →</button></aside>`;
 }
 function strategyQuestionsPanel() {
   const questions = data.growthSystem.strategyQuestions?.active || [];
@@ -1390,6 +1404,17 @@ onAuthStateChanged(supportAuth, async (user) => {
 });
 
 document.addEventListener("click", async (event) => {
+  const timeline = event.target.closest("[data-timeline-stage], [data-open-timeline]");
+  if (timeline) {
+    growth.timelineStage = timeline.dataset.timelineStage || timeline.dataset.openTimeline;
+    if (timeline.dataset.openTimeline) { $("#detail").close(); growthTab = "strategy"; }
+    growth();
+    const selected = document.querySelector(`.timeline-stop[data-timeline-stage="${growth.timelineStage}"]`);
+    selected?.focus({preventScroll:true});
+    if (timeline.dataset.openTimeline) document.querySelector(".growth-timeline")?.scrollIntoView({block:"start"});
+    return;
+  }
+
   const answer = event.target.closest("[data-strategy-answer]");
   if (answer) { await submitStrategyAnswer(answer); return; }
   const tab = event.target.closest("[data-growth-tab]");
