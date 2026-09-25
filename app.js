@@ -1,3 +1,4 @@
+import { parseStrategyAnswer, encodeStrategyAnswer } from "./strategy-answer.js?v=20260925-simple-1";
 import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
@@ -718,9 +719,7 @@ function growthTimelinePanel() {
   const plan = data.growthSystem.growthTimeline;
   if (!plan?.stages?.length) return "";
   const selected = plan.stages.find(s => s.id === growth.timelineStage) || plan.stages.find(s => s.id === plan.currentStage) || plan.stages[0];
-  const index = plan.stages.indexOf(selected);
-  const tasks = selected.taskIds.map(id => data.tasks.find(t => t.id === id)).filter(Boolean);
-  return `<section class="growth-timeline" aria-labelledby="growth-timeline-title"><header class="timeline-heading"><div><span class="timeline-kicker">THE GROWTH PLAN</span><h2 id="growth-timeline-title">From first conversation to paying creators.</h2><p>${esc(plan.summary)}</p></div><div class="timeline-goal"><span>OUR FIRST MILESTONE</span><strong>5 <small>paying subscribers</small></strong><span>A goal, not a promised result</span></div></header><div class="timeline-track" aria-label="Growth plan steps">${plan.stages.map((stage, i) => `<button class="timeline-stop ${stage.id === selected.id ? "selected" : ""}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="timeline-stage-detail"><span class="timeline-node">${String(i+1).padStart(2,"0")}</span><span class="timeline-stop-label">${esc(stage.eyebrow)}</span><strong>${esc(stage.label)}</strong><span class="timeline-window">${esc(stage.window)}</span>${stage.id === plan.currentStage ? '<span class="timeline-focus">Current focus</span>' : ''}</button>`).join("")}</div><article class="timeline-detail" id="timeline-stage-detail" aria-label="Selected growth step"><header><div><span class="timeline-kicker">STEP ${String(index+1).padStart(2,"0")} · ${esc(selected.eyebrow)}</span><h3>${esc(selected.title)}</h3><p>${esc(selected.outcome)}</p></div><div class="timeline-duration"><span>PLANNING WINDOW</span><strong>${esc(selected.window)}</strong></div></header><div class="timeline-detail-body"><section class="timeline-work"><h4>The work in this step</h4><div class="timeline-task-list">${tasks.map(t => `<button data-task-detail="${esc(t.id)}"><span class="timeline-task-icon" aria-hidden="true">↗</span><span><strong>${esc(growthTaskTitle(t))}</strong><small>${esc(label(taskStatus(t)))}</small></span><span aria-hidden="true">→</span></button>`).join("")}</div><div class="timeline-parallel"><span aria-hidden="true">⇄</span><p><strong>What can overlap</strong>${esc(selected.parallel)}</p></div></section><section class="timeline-conditions"><div><span class="timeline-condition-label">WHEN THIS STARTS</span><p>${esc(selected.start)}</p></div><div class="timeline-gate"><span class="timeline-condition-label">READY TO MOVE ON WHEN</span><p>${esc(selected.gate)}</p></div><div><span class="timeline-condition-label">WHAT THIS UNLOCKS</span><p>${esc(selected.next)}</p></div></section></div><footer><span>Step ${index+1} of ${plan.stages.length}</span><div>${index ? `<button class="quiet" data-timeline-stage="${esc(plan.stages[index-1].id)}">← Previous step</button>` : ''}${index < plan.stages.length-1 ? `<button class="timeline-next" data-timeline-stage="${esc(plan.stages[index+1].id)}">Explore next step →</button>` : `<button class="timeline-next" data-timeline-stage="${esc(plan.stages[0].id)}">Back to the first step ↻</button>`}</div></footer></article><p class="timeline-footnote">${esc(plan.timingNote)} The 7- and 14-day checks start at each creator’s first successful export.</p><div class="timeline-source"><span>AI-reviewed plan · ${esc(plan.reviewedAt)}</span><button class="text-btn" data-doc="01_STRATEGY/GROWTH_PLAN.md">Read the saved strategy ↗</button></div></section>`;
+  return `<section class="growth-timeline simple-timeline" aria-labelledby="growth-timeline-title"><header><h2 id="growth-timeline-title">The growth plan</h2><p>Our path to the first 5 paying subscribers.</p></header><div class="timeline-track" aria-label="Growth plan steps">${plan.stages.map((stage,i) => `<button class="timeline-stop ${stage.id === selected.id ? "selected" : ""}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="timeline-stage-detail"><span class="timeline-node">${i+1}</span><strong>${esc(stage.label)}</strong><span class="timeline-window">${esc(stage.window)}</span>${stage.id === plan.currentStage ? '<small>Start here</small>' : i === 1 ? '<small>Can start in parallel</small>' : ''}</button>`).join("")}</div><article id="timeline-stage-detail" class="simple-step" aria-label="Selected growth step"><h3>${esc(selected.title)}</h3><p>${esc(selected.outcome)}</p><details class="timeline-more"><summary>View tasks &amp; details</summary><div class="timeline-more-body"><div class="timeline-task-list">${selected.taskIds.map(id => {const t=data.tasks.find(t=>t.id===id);return t ? `<button data-task-detail="${esc(id)}"><span><strong>${esc(growthTaskTitle(t))}</strong><small>${esc(label(taskStatus(t)))}</small></span><span aria-hidden="true">→</span></button>` : '';}).join("")}</div><dl><dt>Starts when</dt><dd>${esc(selected.start)}</dd><dt>Ready for the next step</dt><dd>${esc(selected.gate)}</dd><dt>Can happen alongside</dt><dd>${esc(selected.parallel)}</dd><dt>Up next</dt><dd>${esc(selected.next)}</dd></dl></div><p class="subtle">${esc(plan.timingNote)}</p><button class="text-btn" data-doc="01_STRATEGY/GROWTH_PLAN.md">Read the saved strategy ↗</button></details></article><p class="timeline-footnote">Estimated timing. The 7- and 14-day checks start after each creator’s first export.</p></section>`;
 }
 function taskTimelineContext(t) {
   const plan = data.growthSystem.growthTimeline;
@@ -728,37 +727,65 @@ function taskTimelineContext(t) {
   if (!stage) return "";
   return `<aside class="task-timeline-context"><small>PLACE IN THE GROWTH PLAN · STEP ${plan.stages.indexOf(stage)+1}</small><strong>${esc(stage.label)}</strong><p>${esc(stage.window)} · ${esc(stage.start)}</p><p><b>Unlocks:</b> ${esc(stage.next)}</p><button class="text-btn" data-open-timeline="${esc(stage.id)}">See this step in the timeline →</button></aside>`;
 }
+const strategyDrafts = new Map();
+const strategyNotices = new Map();
 function strategyQuestionsPanel() {
   const questions = data.growthSystem.strategyQuestions?.active || [];
   if (!questions.length) return "";
-  return `<section class="strategy-questions" aria-labelledby="strategy-questions-title"><header><h3 id="strategy-questions-title">Help shape the next tasks</h3><p>Three quick decisions. Your answers guide the next AI run, which updates the tasks and brings back the next critical questions.</p></header><div class="strategy-question-grid">${questions.map(q => {
+  return `<section class="strategy-questions" aria-labelledby="strategy-questions-title"><header><h3 id="strategy-questions-title">Help shape the next tasks</h3><p>Answer what you can. AI reviews your choices on its next run.</p></header><div class="strategy-question-grid">${questions.map(q => {
     const saved = sharedAdminActions[q.id];
-    return `<article data-strategy-question="${esc(q.id)}"><h4>${esc(q.question)}</h4><p>${esc(q.why)}</p>${saved ? `<p class="strategy-answer" role="status">${saved.resolution === "YES" ? "Yes" : saved.resolution === "NO" ? "No" : "Answer saved"} · ${saved.status === "ARCHIVED" ? "Reviewed. Refresh snapshot for the next question." : "Saved for the next AI run"}</p>` : `<div class="strategy-choices" role="group" aria-label="${esc(q.question)}"><button class="quiet" data-strategy-answer="YES" data-question-id="${esc(q.id)}">Yes</button><button class="quiet" data-strategy-answer="NO" data-question-id="${esc(q.id)}">No</button></div><p role="status" class="subtle strategy-save-status"></p>`}</article>`;
-  }).join("")}</div><p class="subtle">Answer any that you’re ready for. These choices guide planning; specific sends, publication and spending still need their own approval.</p></section>`;
+    let answer;
+    if(saved) { try {answer=parseStrategyAnswer(saved.resolution);} catch {answer={answer:"Saved answer",comment:""};} }
+    const draft = strategyDrafts.get(q.id) || {answer:'',comment:''};
+    return `<article data-strategy-question="${esc(q.id)}"><h4 id="question-${esc(q.id)}">${esc(q.question)}</h4>${saved ? `<p class="strategy-answer" role="status">${esc({YES:'Yes',NO:'No',OTHER:'Other'}[answer.answer] || answer.answer)} · ${saved.status === "ARCHIVED" ? "Reviewed" : "Saved for the next AI run"}</p>${answer.comment ? `<p class="strategy-saved-comment">${esc(answer.comment)}</p>` : ''}${saved.status === "RESOLVED" ? `<button class="text-btn" data-strategy-undo="${esc(q.id)}">Undo answer</button><p class="strategy-save-status subtle" role="status"></p>` : '<p class="subtle">Refresh for the next question. Reviewed answers can no longer be undone.</p>'}` : `<form data-strategy-form="${esc(q.id)}" aria-labelledby="question-${esc(q.id)}"><div class="strategy-choices" role="group" aria-label="Choose an answer">${['YES','NO','OTHER'].map(value=>`<label class="strategy-choice"><input type="radio" name="answer-${esc(q.id)}" value="${value}" ${draft.answer===value?'checked':''}><span>${{YES:'Yes',NO:'No',OTHER:'Other'}[value]}</span></label>`).join('')}</div><details class="strategy-comment" ${draft.comment ? 'open' : ''}><summary>Add a comment <span>(optional)</span></summary><label class="sr-only" for="comment-${esc(q.id)}">Optional comment</label><textarea id="comment-${esc(q.id)}" name="comment" rows="2" maxlength="1000" placeholder="Anything you’d like AI to consider…">${esc(draft.comment)}</textarea></details><button class="quiet strategy-save" type="submit" ${draft.answer?'':'disabled'}>Save answer</button><p role="status" class="subtle strategy-save-status">${esc(strategyNotices.get(q.id) || '')}</p></form>`}</article>`;
+  }).join("")}</div></section>`;
 }
-async function submitStrategyAnswer(button) {
-  const id = button.dataset.questionId, value = button.dataset.strategyAnswer;
+async function submitStrategyAnswer(form) {
+  const id = form.dataset.strategyForm;
   const item = data.growthSystem.strategyQuestions.active.find(q => q.id === id);
-  if (!item || !["YES", "NO"].includes(value) || sharedAdminActions[id]) return;
-  const card = button.closest("[data-strategy-question]");
-  const status = card.querySelector("[role=status]");
-  card.querySelectorAll("button").forEach(b => b.disabled = true);
-  status.textContent = "Saving…";
+  const choice = form.querySelector('input:checked')?.value;
+  const comment = form.querySelector('textarea').value;
+  if (!item || !choice || sharedAdminActions[id]) return;
+  const status = form.querySelector('[role=status]');
+  const controls = form.querySelectorAll('button,input,textarea');
+  controls.forEach(c => c.disabled=true);
+  status.textContent='Saving…';
   try {
-    const url = `https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(id)}.json`;
-    const current = await fetch(url, {headers:{"X-Firebase-ETag":"true"},cache:"no-store"});
-    if (!current.ok) throw new Error("Could not check saved answers. Try again.");
-    const existing = await current.json();
-    if (existing) { sharedAdminActions[id] = existing; growth(); return; }
-    const record = {id, title:item.question, status:"RESOLVED", original:JSON.stringify({kind:"strategy",item}), resolution:value, submittedAt:new Date().toISOString()};
-    const response = await fetch(url, {method:"PUT",headers:{"Content-Type":"application/json","If-Match":current.headers.get("ETag") || "null_etag"},body:JSON.stringify(record)});
-    if (!response.ok) throw new Error(response.status === 412 ? "Another device answered this question. Refresh to see it." : "Answer was not saved. Please try again.");
-    sharedAdminActions[id] = record;
+    const resolution=encodeStrategyAnswer(choice,comment);
+    const url=`https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(id)}.json`;
+    const current=await fetch(url,{headers:{'X-Firebase-ETag':'true'},cache:'no-store'});
+    if(!current.ok) throw new Error('Could not check saved answers. Try again.');
+    const existing=await current.json();
+    if(existing) {sharedAdminActions[id]=existing;growth();return;}
+    const record={id,title:item.question,status:'RESOLVED',original:JSON.stringify({kind:'strategy',item}),resolution,submittedAt:new Date().toISOString()};
+    const response=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':current.headers.get('ETag') || 'null_etag'},body:JSON.stringify(record)});
+    if(!response.ok) throw new Error(response.status===412?'Another device changed this answer. Refresh to see it.':'Answer was not saved. Please try again.');
+    sharedAdminActions[id]=record;
+    strategyDrafts.delete(id);strategyNotices.delete(id);
     growth();
-  } catch (error) {
-    status.textContent = error.message;
-    card.querySelectorAll("button").forEach(b => b.disabled = false);
-  }
+  } catch(error) {status.textContent=error.message;controls.forEach(c=>c.disabled=false);}
+}
+async function undoStrategyAnswer(button) {
+  const id=button.dataset.strategyUndo, saved=sharedAdminActions[id];
+  if(saved?.status!=='RESOLVED') return;
+  const status=button.closest('article').querySelector('.strategy-save-status');
+  button.disabled=true;status.textContent='Undoing…';
+  try {
+    const url=`https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(id)}.json`;
+    const current=await fetch(url,{headers:{'X-Firebase-ETag':'true'},cache:'no-store'});
+    if(!current.ok) throw new Error('Could not check your answer. Try again.');
+    const latest=await current.json();
+    if(latest?.status==='ARCHIVED') {sharedAdminActions[id]=latest;growth();return;}
+    if(latest && (latest.status!=='RESOLVED' || latest.submittedAt!==saved.submittedAt || latest.resolution!==saved.resolution || latest.original!==saved.original)) throw new Error('The answer changed on another device. Refresh before undoing.');
+    if(latest) {
+      const response=await fetch(url,{method:'DELETE',headers:{'If-Match':current.headers.get('ETag') || 'null_etag'}});
+      if(!response.ok) throw new Error(response.status===412?'The answer changed during undo. Refresh to see it.':'Could not undo. Your answer is still saved.');
+    }
+    const previous=parseStrategyAnswer(saved.resolution);
+    strategyDrafts.set(id,{answer:'',comment:previous.comment});
+    strategyNotices.set(id,'Answer undone. Choose again when ready.');
+    delete sharedAdminActions[id];growth();
+  } catch(error) {status.textContent=error.message;button.disabled=false;}
 }
 async function submitActionResolution(form) {
   const id = form.dataset.actionId, kind = form.dataset.kind;
@@ -1415,8 +1442,8 @@ document.addEventListener("click", async (event) => {
     return;
   }
 
-  const answer = event.target.closest("[data-strategy-answer]");
-  if (answer) { await submitStrategyAnswer(answer); return; }
+  const undo = event.target.closest("[data-strategy-undo]");
+  if (undo) { await undoStrategyAnswer(undo); return; }
   const tab = event.target.closest("[data-growth-tab]");
   if (tab) { growthTab = tab.dataset.growthTab; growth(); return; }
   const milestone = event.target.closest("[data-growth-milestone]");
@@ -1436,4 +1463,17 @@ document.addEventListener("submit", async (event) => {
   if (event.target?.id !== "action-resolution") return;
   event.preventDefault();
   await submitActionResolution(event.target);
+});
+
+document.addEventListener('input', event => {
+  const form=event.target.closest('[data-strategy-form]');
+  if(!form) return;
+  const draft={answer:form.querySelector('input:checked')?.value || '',comment:form.querySelector('textarea').value};
+  strategyDrafts.set(form.dataset.strategyForm,draft);
+  form.querySelector('button[type=submit]').disabled=!draft.answer;
+});
+document.addEventListener('submit', async event => {
+  const form=event.target.closest('[data-strategy-form]');
+  if(!form) return;
+  event.preventDefault();await submitStrategyAnswer(form);
 });
