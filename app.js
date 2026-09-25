@@ -719,12 +719,14 @@ function growthTimelinePanel() {
   if (!plan?.stages?.length) return "";
   const selected = plan.stages.find(s => s.id === growth.timelineStage) || plan.stages.find(s => s.id === plan.currentStage) || plan.stages[0];
   const channels = g.channels || [];
+  const overview = data.growthSystem.strategyOverview;
+  const facts = (items, places = false) => `<dl class="strategy-facts${places ? ' strategy-places' : ''}">${items.map(item => `<div><dt>${item.label ? `<em>${esc(item.label)}</em> ` : ''}${esc(item.title)}</dt><dd>${esc(item.detail)}</dd></div>`).join('')}</dl>`;
   return `<section class="growth-timeline simple-timeline unified-growth" aria-labelledby="growth-timeline-title">
     <header><h2 id="growth-timeline-title">Growth Plan</h2><p class="strategy-plan-status">Organic pilot · still to be tested</p></header>
     <ol class="strategy-flow" aria-label="Growth strategy flow">
-      <li><h3><span>1</span> What we know</h3><dl class="strategy-facts"><div><dt>Use matters more than clicks</dt><dd>Count exports, return use and payment.</dd></div><div><dt>Give people time</dt><dd>Check return use at 7 days; payment at 14.</dd></div><div><dt>No proven customer path yet</dt><dd>Test a small pilot before expanding.</dd></div></dl></li>
-      <li><h3><span>2</span> Where customers are</h3><dl class="strategy-facts strategy-places"><div><dt><em>First</em> Creators &amp; communities</dt><dd>Android reaction-video makers.</dd></div><div><dt><em>Next</em> Video &amp; search</dt><dd>Shorts, Reels, TikTok, Play &amp; help pages.</dd></div><div><dt><em>Later</em> Referrals &amp; paid ads</dt><dd>After real value; ads need economics and approval.</dd></div></dl></li>
-      <li><h3><span>3</span> How we reach them</h3><dl class="strategy-facts"><div><dt>Invite personally</dt><dd>Prepare a 10–20 creator pilot.</dd></div><div><dt>Show a real demo</dt><dd>One useful, rights-cleared workflow.</dd></div><div><dt>Help make the first video</dt><dd>Confirm support and sending approval.</dd></div></dl></li>
+      <li><h3><span>1</span> What we know</h3>${facts(overview.whatWeKnow)}</li>
+      <li><h3><span>2</span> Where customers are</h3>${facts(overview.whereCustomersAre, true)}</li>
+      <li><h3><span>3</span> How we reach them</h3>${facts(overview.howWeReachThem)}</li>
       <li class="strategy-sequence"><div class="strategy-sequence-heading"><h3><span>4</span> What happens next</h3><span>Research + proof can start together</span></div>
       <div class="timeline-track" aria-label="Growth plan steps">${plan.stages.map((stage,i) => `<button class="timeline-stop ${stage.id === selected.id ? "selected" : ""}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="timeline-stage-detail"><span class="timeline-node">${i+1}</span><strong>${esc(stage.label)}</strong><span class="timeline-window">${esc(stage.window)}</span>${stage.id === plan.currentStage ? '<small>Start here</small>' : i === 1 ? '<small>Can start in parallel</small>' : ''}</button>`).join("")}</div>
       </li>
