@@ -49,7 +49,7 @@ let data,
   activePin = "",
   failedAttempts = 0,
   planTaskView = "all",
-  growthTab = "actions",
+  growthTab = "work",
   sharedAdminActions = {},
   pendingAttention = null,
   adminState = {
@@ -408,7 +408,9 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  return `<nav class="growth-tabs" aria-label="Growth sections">${[["actions","Admin Actions"],["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
+  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]];
+  if (adminActionCandidates().length) tabs.unshift(["actions", "Admin Actions"]);
+  return `<nav class="growth-tabs" aria-label="Growth sections">${tabs.map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
 }
 function expectedResultBody(result) {
   const range = result.expectedImpact.range;
@@ -566,11 +568,14 @@ function growthStrengthRadar(tasks) {
 function growth() {
   const g = data.growthSystem;
   if (!g) { $("#main").innerHTML = head("Growth", "Refresh to load the growth plan."); return; }
-  if (growthTab === "actions") return growthActions();
+  if (growthTab === "actions") {
+    if (adminActionCandidates().length) return growthActions();
+    growthTab = "work";
+  }
   if (growthTab === "expected") return growthExpectedResults();
   if (growthTab === "tasks") return plan(true);
   if (growthTab === "rhythm") growthTab = "work";
-  if (!["work", "strategy", "roadmap"].includes(growthTab)) { growthTab = "actions"; return growthActions(); }
+  if (!["work", "strategy", "roadmap"].includes(growthTab)) { growthTab = "work"; }
   const simple = g.adminView;
   if (!simple) { $("#main").innerHTML = head("Growth", "Refresh to load the simplified growth plan."); return; }
   const tasks = data.tasks.filter(t => t.lifecycle === "GROWTH");
@@ -852,7 +857,7 @@ function navigate() {
     };
   view = redirects[requested] || requested;
   if (!titles[view]) view = "overview";
-  if (view === "growth") growthTab = pendingAttention ? "actions" : "home";
+  if (view === "growth") growthTab = pendingAttention ? "actions" : "work";
   if (requested !== view) history.replaceState(null, "", `#${view}`);
   $("#crumb").textContent = titles[view];
   document.querySelectorAll("[data-view]").forEach((a) => {
