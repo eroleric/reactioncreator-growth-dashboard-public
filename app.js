@@ -50,6 +50,7 @@ let data,
   failedAttempts = 0,
   planTaskView = "all",
   growthTab = "home",
+  sharedAdminActions = {},
   pendingAttention = null,
   adminState = {
     overviewNote: "",
@@ -256,19 +257,30 @@ function taskDetail(id, currentNote = "", currentBlocker = "") {
 }
 const openOwnerActions = () => data.owners.filter(item => ["OPEN", "BLOCKED"].includes(item.status));
 const readyGrowthDecisions = () => (data.growthSystem?.approvals || []).filter(item => item.status === "READY");
+function adminActionCandidates() {
+  return [
+    ...openOwnerActions().map(item => ({ kind: "owner", id: item.id, title: item.blocks || "Action needed", trigger: item.trigger, priority: item.status === "BLOCKED" ? 0 : 2 })),
+    ...readyGrowthDecisions().map(item => ({ kind: "decision", id: item.id, title: item.decision, trigger: item.trigger, priority: 1 })),
+  ].filter(item => !["RESOLVED", "ARCHIVED"].includes(sharedAdminActions[item.id]?.status)).sort((a, b) => a.priority - b.priority).slice(0, 2);
+}
+const submittedAdminActions = () => Object.values(sharedAdminActions).filter(item => item.status === "RESOLVED");
+const archivedAdminActions = () => Object.values(sharedAdminActions).filter(item => item.status === "ARCHIVED").sort((a, b) => (b.processedAt || "").localeCompare(a.processedAt || ""));
+function actionResolutionForm(kind, id) {
+  return `<form id="action-resolution" data-kind="${esc(kind)}" data-action-id="${esc(id)}"><h3>Action Resolution</h3><label for="action-resolution-text">What happened or what was the result?</label><textarea id="action-resolution-text" rows="4" maxlength="2000" required placeholder="Describe what you did, the result, or your decision."></textarea><p class="subtle">Do not enter passwords, codes, contact details, or other sensitive information.</p><button type="submit">Submit Resolution</button><p id="action-resolution-status" role="status" aria-live="polite"></p></form>`;
+}
 function ownerActionDetail(id) {
-  const item = openOwnerActions().find(action => action.id === id);
+  const item = data.owners.find(action => action.id === id);
   if (!item) return;
   const steps = [...item.action.matchAll(/(?:^|\s)(\d+)\.\s+([\s\S]*?)(?=\s+\d+\.\s+|\s+(?:Success|Report back):|$)/g)]
     .map(match => `<li>${esc(match[2].trim())}</li>`).join("");
   const success = item.action.match(/Success:\s*(.*?)(?=\s+Report back:|$)/)?.[1];
   const report = item.action.match(/Report back:\s*(.*)$/)?.[1];
-  openDetail(`OWNER ACTION · ${item.id}`, item.blocks || "Action needed", `<div class="owner-action-detail"><span class="tag warn">${esc(item.status)}</span><h3>Admin steps</h3>${steps ? `<ol class="admin-steps">${steps}</ol>` : `<p>${esc(item.action)}</p>`}${success ? `<p><strong>Success:</strong> ${esc(success)}</p>` : ""}${report ? `<p><strong>Report back:</strong> ${esc(report)}</p>` : ""}<h3>Why this matters</h3><p>${esc(item.why)}</p><p><strong>When:</strong> ${esc(item.trigger)}</p><p><strong>Latest record:</strong> ${esc(item.resolution || "No update recorded")}</p></div>`);
+  openDetail(`ADMIN ACTION · ${item.id}`, item.blocks || "Action needed", `<div class="owner-action-detail"><span class="tag warn">${esc(item.status)}</span><h3>Admin steps</h3>${steps ? `<ol class="admin-steps">${steps}</ol>` : `<p>${esc(item.action)}</p>`}${success ? `<p><strong>Success:</strong> ${esc(success)}</p>` : ""}${report ? `<p><strong>Report back:</strong> ${esc(report)}</p>` : ""}<h3>Why this matters</h3><p>${esc(item.why)}</p><p><strong>When:</strong> ${esc(item.trigger)}</p><p><strong>Latest record:</strong> ${esc(item.resolution || "No update recorded")}</p>${actionResolutionForm("owner", id)}</div>`);
 }
 function growthDecisionDetail(id) {
   const item = readyGrowthDecisions().find(decision => decision.id === id);
   if (!item) return;
-  openDetail(`GROWTH DECISION · ${item.id}`, item.decision, `<div class="owner-action-detail"><p>${esc(item.trigger)}</p><h3>Admin steps</h3><ol class="admin-steps">${item.adminSteps.map(step => `<li>${esc(step)}</li>`).join("")}</ol><button class="text-btn" data-doc="${esc(item.deliverable)}">Review prepared work →</button></div>`);
+  openDetail(`ADMIN ACTION · ${item.id}`, item.decision, `<div class="owner-action-detail"><p>${esc(item.trigger)}</p><h3>Admin steps</h3><ol class="admin-steps">${item.adminSteps.map(step => `<li>${esc(step)}</li>`).join("")}</ol><button class="text-btn" data-doc="${esc(item.deliverable)}">Review prepared work →</button>${actionResolutionForm("decision", id)}</div>`);
 }
 function openAttention(kind, id) {
   growthTab = "actions";
@@ -282,9 +294,8 @@ function openAttention(kind, id) {
 }
 function overview() {
   const subscribers = metric("Total active subscribers");
-  const owners = openOwnerActions();
-  const approvals = readyGrowthDecisions();
-  const attentionCount = owners.length + approvals.length;
+  const actions = adminActionCandidates();
+  const attentionCount = actions.length;
   const workspace = (lifecycle, name, description, status, destination, tone) => {
     const summary = taskStatusSummary(data.tasks.filter(t => t.lifecycle === lifecycle));
     const next = nextLifecycleTask(lifecycle);
@@ -296,15 +307,14 @@ function overview() {
     </article>`;
   };
   const attentionItems = [
-    ...owners.map(item => `<article><span>Owner action · ${esc(item.id)}</span><strong>${esc(item.blocks)}</strong><button class="text-btn" type="button" data-open-owner="${esc(item.id)}">Open action →</button></article>`),
-    ...approvals.map(item => `<article><span>Growth decision</span><strong>${esc(item.decision)}</strong><button class="text-btn" type="button" data-open-decision="${esc(item.id)}">Open decision →</button></article>`),
+    ...actions.map(item => `<article><span>Admin Action · ${esc(item.id)}</span><strong>${esc(item.title)}</strong><button class="text-btn" type="button" data-open-${item.kind}="${esc(item.id)}">Open Action →</button></article>`),
   ].join("");
   $("#main").innerHTML = `<div class="overview-calm">
     <header class="overview-heading"><div><div class="eyebrow">YOUR PROJECT AT A GLANCE</div><h1>Overview</h1><p>Small steps toward your first 5 paying subscribers.</p></div><span class="overview-season">Growth</span></header>
     <section class="overview-kpis" aria-label="Project at a glance">${stat("Paying subscribers", `${display(subscribers.value)} <span>/ 5</span>`, esc(subscribers.asOf))}${stat("Monthly recurring revenue", display(metric("MRR").value), esc(metric("MRR").asOf))}${stat("Budget left", money(data.budget.remaining), `${money(data.budget.spent)} spent · ${money(data.budget.total)} total`)}</section>
     <section class="overview-workspaces" aria-label="Growth workspace">${workspace("GROWTH", "Growth & budget", "Turn real usage into paying subscribers.", "Current scope", "growth", "growth")}</section>
     <section class="overview-attention ${attentionCount ? "has-actions" : "clear"}" aria-label="Admin attention">
-      ${attentionCount ? `<details><summary><span class="overview-attention-icon" aria-hidden="true">!</span><span><strong>${attentionCount} ${attentionCount === 1 ? "item needs" : "items need"} your attention</strong><small>Decisions, access, or hands-on help</small></span><span class="overview-expand">View items <span aria-hidden="true">⌄</span></span></summary><div class="overview-attention-list">${attentionItems}</div><div class="overview-attention-footer">${owners.length ? `<button class="text-btn" type="button" data-open-owner="${esc(owners[0].id)}">Open admin tasks →</button>` : ""}${approvals.length ? `<button class="text-btn" type="button" data-open-decision="${esc(approvals[0].id)}">Open Growth decisions →</button>` : ""}</div></details>` : '<strong>Nothing needs your attention right now.</strong>'}
+      ${attentionCount ? `<details><summary><span class="overview-attention-icon" aria-hidden="true">!</span><span><strong>${attentionCount} ${attentionCount === 1 ? "Admin Action needs" : "Admin Actions need"} your attention</strong><small>Decisions, access, or hands-on help</small></span><span class="overview-expand">View items <span aria-hidden="true">⌄</span></span></summary><div class="overview-attention-list">${attentionItems}</div><div class="overview-attention-footer"><button class="text-btn" type="button" data-open-${actions[0].kind}="${esc(actions[0].id)}">Open Admin Actions →</button></div></details>` : '<strong>Nothing needs your attention right now.</strong>'}
     </section>
   </div>`;
 }
@@ -397,7 +407,7 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  return `<nav class="growth-tabs" aria-label="Growth sections">${[["home","Summary"],["actions","Actions"],["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["evidence","Results"],["expected","Expected Task Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
+  return `<nav class="growth-tabs" aria-label="Growth sections">${[["home","Summary"],["actions","Admin Actions"],["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["evidence","Results"],["expected","Expected Task Results"]].map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
 }
 function expectedResultBody(result) {
   const range = result.expectedImpact.range;
@@ -423,10 +433,10 @@ function growthExpectedResults() {
   render();
 }
 function growthActions() {
-  const owners = openOwnerActions(), decisions = readyGrowthDecisions();
-  const ownerCards = owners.map(item => `<article class="panel growth-action-card"><div><small>${esc(item.id)} · ${esc(item.status)}</small><h2>${esc(item.blocks)}</h2><p>${esc(item.trigger)}</p></div><button class="quiet" type="button" data-owner-action="${esc(item.id)}">Open action →</button></article>`).join("");
-  const decisionCards = decisions.map(item => `<article class="panel growth-action-card"><div><small>${esc(item.id)} · READY</small><h2>${esc(item.decision)}</h2><p>${esc(item.trigger)}</p></div><button class="quiet" type="button" data-decision-action="${esc(item.id)}">Open decision →</button></article>`).join("");
-  $("#main").innerHTML = head("Your actions", "Open an item to see the exact steps and latest recorded context.") + growthNavigation() + `<div class="growth-workspace growth-simple"><section class="growth-action-list" aria-label="Open owner actions and Growth decisions">${ownerCards}${decisionCards || ""}${owners.length || decisions.length ? "" : '<div class="panel empty">Nothing needs your attention right now.</div>'}</section></div>`;
+  const actions = adminActionCandidates(), pending = submittedAdminActions(), archived = archivedAdminActions();
+  const cards = actions.map(item => `<article class="panel growth-action-card"><div><small>${esc(item.id)}</small><h2>${esc(item.title)}</h2><p>${esc(item.trigger)}</p></div><button class="quiet" type="button" data-${item.kind}-action="${esc(item.id)}">Open Action →</button></article>`).join("");
+  const archive = archived.length ? `<details class="admin-action-archive"><summary>Archive (${archived.length})</summary>${archived.map(item => `<article class="panel archived-action"><h3>${esc(item.title)}</h3><p>${esc(item.id)} · Resolved ${esc(item.submittedAt || "")}</p><button class="text-btn" type="button" data-archived-action="${esc(item.id)}">View record →</button></article>`).join("")}</details>` : "";
+  $("#main").innerHTML = head("Admin Actions", "Only essential decisions or hands-on steps appear here.") + growthNavigation() + `<div class="growth-workspace growth-simple"><section class="growth-action-list" aria-label="Active Admin Actions">${cards || '<div class="panel empty">Nothing needs your attention right now.</div>'}</section>${pending.length ? `<p class="admin-processing">${pending.length} submitted ${pending.length === 1 ? "resolution is" : "resolutions are"} waiting for AI to record the outcome.</p>` : ""}${archive}</div>`;
 }
 const growthTaskTitle = t => t.execution?.adminTitle || t.title;
 const growthTaskSummary = t => t.execution?.adminSummary || t.success;
@@ -566,11 +576,10 @@ function growth() {
   if (!simple) { $("#main").innerHTML = head("Growth", "Refresh to load the simplified growth plan."); return; }
   const tasks = data.tasks.filter(t => t.lifecycle === "GROWTH");
 
-  const owners = openOwnerActions();
-  const pending = readyGrowthDecisions();
+  const actions = adminActionCandidates();
   const next = tasks.find(t => t.id === g.focus.nextTask && taskAvailable(t)) || tasks.find(taskAvailable);
   const docButton = (path, title) => `<button class="text-btn" data-doc="${esc(path)}">${esc(title)} ↗</button>`;
-  const adminContent = owners.length || pending.length ? `${owners.map(item => `<article class="growth-decision"><h3>${esc(item.blocks)}</h3><p>${esc(item.trigger)}</p><button class="quiet" type="button" data-open-owner="${esc(item.id)}">Open action →</button></article>`).join("")}${pending.map(item => `<article class="growth-decision"><h3>${esc(item.decision)}</h3><p>${esc(item.trigger)}</p><button class="quiet" type="button" data-open-decision="${esc(item.id)}">Open decision →</button></article>`).join("")}` : '<p class="growth-none">Nothing needed from you.</p><p>AI will ask when a decision or access is needed.</p>';
+  const adminContent = actions.length ? actions.map(item => `<article class="growth-decision"><h3>${esc(item.title)}</h3><p>${esc(item.trigger)}</p><button class="quiet" type="button" data-open-${item.kind}="${esc(item.id)}">Open Action →</button></article>`).join("") : '<p class="growth-none">Nothing needed from you.</p><p>AI will ask when a decision or access is needed.</p>';
   const nextContent = next ? `<h3>${esc(growthTaskTitle(next))}</h3><p>${esc(growthTaskSummary(next))}</p><button class="quiet" data-task-detail="${esc(next.id)}">View task</button>` : '<p>No unfinished AI task is available.</p>';
   const automation = g.scheduler.status === "NOT_SCHEDULED" ? "Automatic runs are not set up yet." : `Automatic runs: ${g.scheduler.status}.`;
   const receipts = g.runs.length ? `<ul>${g.runs.slice(-5).reverse().map(r => `<li><strong>${esc(growthTaskTitle(tasks.find(t=>t.id===r.taskId) || {title:r.taskId}))}</strong> · ${esc(r.status)}<p>${esc(r.evidence || r.output || "No result recorded")}</p></li>`).join("")}</ul>` : '<p>No growth runs recorded yet.</p>';
@@ -580,7 +589,7 @@ function growth() {
     const target = g.milestones.find(m => !Number.isFinite(count) || m.target > count)?.target;
     body = `<section class="growth-goal"><div><small>OUR NEXT GOAL</small><h2>${target ? `${target} paying subscribers` : "Choose the next subscriber goal"}</h2><p>${esc(simple.planSummary)}</p></div><span class="tag neutral">Growth</span></section>`;
     body += `<section class="stats growth-stats growth-summary-stats">${growthMetricCard("Total active subscribers","Paying subscribers")}${growthMetricCard("MRR","Monthly recurring revenue")}<article class="stat"><div class="label">Budget left</div><div class="number">${money(data.budget.remaining)}</div><div class="note">${money(data.budget.spent)} spent of ${money(data.budget.total)}</div></article></section>`;
-    body += `<div class="growth-grid">${growthPanel("AI’s next task", nextContent)}${growthPanel(owners.length || pending.length ? "Your action needed" : "Your actions",adminContent)}</div>`;
+    body += `<div class="growth-grid">${growthPanel("AI’s next task", nextContent)}${growthPanel(actions.length ? "Admin Action needed" : "Admin Actions",adminContent)}</div>`;
     body += sharedProjectNotepad("Growth & budget");
     body += `<div class="growth-simple-footer"><p>${esc(automation)} AI’s daily and weekly routines are ready to use.</p><button class="text-btn" data-growth-tab="work">See what AI will do →</button></div>`;
   } else if (growthTab === "work") {
@@ -589,7 +598,7 @@ function growth() {
     const oneTimeCount = tasks.filter(t => growthTaskType(t) === "ONE_TIME").length;
     body += growthMore(`Browse ${oneTimeCount} One Time AI tasks`, `<p class="subtle">Recurring tasks are listed above in Every day, Every week and Every month.</p><label class="growth-search-label">Find a one-time task<input id="growth-task-search" type="search" placeholder="Try website, partners or ads"></label>${oneTimeTaskList(tasks)}<p id="growth-search-empty" hidden>No matching tasks.</p><button class="text-btn" data-growth-tab="tasks">Edit detailed task records →</button>`);
     body += growthMore("Recent AI activity", receipts);
-    if (pending.length) body = growthPanel("Your action needed",adminContent) + body;
+    if (actions.length) body = growthPanel("Admin Action needed",adminContent) + body;
   } else if (growthTab === "strategy") {
     body = growthStrengthRadar(tasks);
     body += `<div class="growth-intro"><h2>How we’ll grow</h2><p>${esc(simple.planSummary)} AI adjusts the plan as results come in.</p></div>`;
@@ -712,6 +721,39 @@ function records() {
 }
 const sharedDashboardApi =
   "https://reaction-creator-default-rtdb.firebaseio.com/dashboard.json";
+function archivedActionDetail(id) {
+  const item = sharedAdminActions[id];
+  if (!item || item.status !== "ARCHIVED") return;
+  const original = (() => { try { return JSON.parse(item.original); } catch { return {}; } })();
+  const steps = original.kind === "decision" ? original.item?.adminSteps?.join("\n") : original.item?.action;
+  openDetail(`ADMIN ACTION ARCHIVE · ${esc(id)}`, item.title, `<div class="owner-action-detail"><h3>Original action</h3><p>${esc(steps || "No original steps recorded")}</p><p><strong>Why / trigger:</strong> ${esc(original.item?.why || original.item?.trigger || "Not recorded")}</p><h3>Admin resolution</h3><p>${esc(item.resolution)}</p><h3>Outcome</h3><p>${esc(item.outcome)}</p><h3>Learned and recorded</h3><p>${esc(item.learned)}</p><p><strong>Brain records:</strong> ${esc(item.recordedIn)}</p></div>`);
+}
+async function submitActionResolution(form) {
+  const id = form.dataset.actionId, kind = form.dataset.kind;
+  const value = form.querySelector("textarea").value.trim();
+  const status = form.querySelector("[role=status]");
+  const button = form.querySelector("button[type=submit]");
+  const item = kind === "owner" ? data.owners.find(row => row.id === id) : readyGrowthDecisions().find(row => row.id === id);
+  if (!item || !value || value.length > 2000 || sharedAdminActions[id]?.status) return;
+  button.disabled = true;
+  status.textContent = "Submitting…";
+  try {
+    const url = `https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(id)}.json`;
+    const existing = await fetch(url, { headers: { "X-Firebase-ETag": "true" }, cache: "no-store" });
+    if (!existing.ok) throw new Error(`Could not check action (${existing.status})`);
+    if (await existing.json()) throw new Error("This action already has a resolution. Refresh the dashboard.");
+    const record = { status: "RESOLVED", id, title: kind === "owner" ? item.blocks : item.decision, original: JSON.stringify({ kind, item }), resolution: value, submittedAt: new Date().toISOString() };
+    const response = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": existing.headers.get("ETag") || "null_etag" }, body: JSON.stringify(record) });
+    if (!response.ok) throw new Error(`Save failed (${response.status})`);
+    sharedAdminActions[id] = record;
+    status.textContent = "Resolution submitted. AI will record what it learned before this action moves to Archive.";
+    $("#detail").close();
+    growth();
+  } catch (error) {
+    status.textContent = error.message || "Could not submit. Please try again.";
+    button.disabled = false;
+  }
+}
 async function patchSharedDashboard(values) {
   const response = await fetch(sharedDashboardApi, {
     method: "PATCH",
@@ -727,6 +769,7 @@ async function loadSharedDashboardState() {
     });
     if (!response.ok) throw new Error();
     const shared = await response.json();
+    sharedAdminActions = Object.fromEntries(Object.entries(shared?.adminActions || {}).filter(([id, item]) => /^[A-Za-z0-9-]{1,40}$/.test(id) && ["RESOLVED", "ARCHIVED"].includes(item?.status)));
     if (shared && typeof shared.overviewNote === "string")
       adminState.overviewNote = shared.overviewNote;
     for (const [id, item] of Object.entries(shared?.tasks || {})) {
@@ -1210,6 +1253,7 @@ document.addEventListener("click", async (e) => {
   if (b.dataset.openDecision) { openAttention("decision", b.dataset.openDecision); return; }
   if (b.dataset.ownerAction) { ownerActionDetail(b.dataset.ownerAction); return; }
   if (b.dataset.decisionAction) { growthDecisionDetail(b.dataset.decisionAction); return; }
+  if (b.dataset.archivedAction) { archivedActionDetail(b.dataset.archivedAction); return; }
   if (b.dataset.go) location.hash = b.dataset.go;
   if (b.dataset.doc) { if ($("#detail").open) $("#detail").close(); doc(b.dataset.doc); }
   if (b.dataset.taskDetail) {
@@ -1341,4 +1385,10 @@ document.addEventListener("click", async (event) => {
     try { await navigator.clipboard.writeText(text); brief.textContent = "Copied · paste into Codex"; }
     catch { openDetail("GROWTH EXECUTION BRIEF", "Copy this brief into Codex", `<textarea class="growth-copy" rows="12" readonly>${esc(text)}</textarea>`); }
   }
+});
+
+document.addEventListener("submit", async (event) => {
+  if (event.target?.id !== "action-resolution") return;
+  event.preventDefault();
+  await submitActionResolution(event.target);
 });

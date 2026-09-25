@@ -3583,6 +3583,18 @@ nav a.active {
 .owner-action-detail h3 { margin: 22px 0 8px; }
 .owner-action-detail .admin-steps { padding-left: 23px; }
 .owner-action-detail .admin-steps li { margin: 0 0 10px; }
+#action-resolution { margin-top: 24px; padding-top: 16px; border-top: 1px solid #dce6e7; }
+#action-resolution h3 { margin: 0 0 8px; }
+#action-resolution label { display: block; margin-bottom: 8px; font-weight: 600; }
+#action-resolution textarea { display: block; width: 100%; box-sizing: border-box; min-height: 100px; padding: 12px; font: inherit; border: 1px solid #b8c9cf; border-radius: 10px; resize: vertical; }
+#action-resolution .subtle { margin: 8px 0 14px; font-size: 12px; }
+#action-resolution [role="status"] { min-height: 1.2em; }
+.admin-processing { margin: 16px 2px; color: #546b73; font-size: 13px; }
+.admin-action-archive { margin-top: 20px; }
+.admin-action-archive summary { cursor: pointer; font-weight: 600; }
+.archived-action { margin-top: 10px; padding: 14px 18px; }
+.archived-action h3 { margin: 0 0 3px; font-size: 15px; }
+.archived-action p { margin: 0 0 7px; font-size: 12px; color: #607284; }
 .overview-attention-list .text-btn { justify-self: start; }
 @media(max-width:600px) {
   .project-notepad .panel-head { flex-direction: column; gap: 12px; padding: 21px 20px 17px; }
