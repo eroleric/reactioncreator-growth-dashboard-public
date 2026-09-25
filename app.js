@@ -723,7 +723,7 @@ function growthTimelinePanel() {
   const selected = plan.stages.find(s => s.id === growth.timelineStage) || plan.stages.find(s => s.id === plan.currentStage) || plan.stages[0];
   const channels = g.channels || [];
   const overview = data.growthSystem.strategyOverview;
-  const facts = (items, key, places = false) => `<div class="strategy-knowledge"><div class="strategy-knowledge-heading"><small>Approved / hardcoded strategy knowledge</small><div><span data-knowledge-position="${key}" aria-live="polite"></span><button type="button" data-knowledge-slide="previous" data-knowledge-key="${key}" aria-label="Previous ${key} strategies">←</button><button type="button" data-knowledge-slide="next" data-knowledge-key="${key}" aria-label="Next ${key} strategies">→</button></div></div><dl class="strategy-facts${places ? ' strategy-places' : ''}" data-knowledge-track="${key}" role="region" aria-label="Approved ${key} strategies">${items.map(item => `<div>${item.source === 'APPROVED_ADMIN' ? '<small class="knowledge-provenance">Approved Admin Knowledge</small>' : ''}<dt>${item.label ? `<em>${esc(item.label)}</em> ` : ''}${esc(item.title)}</dt><dd>${esc(item.detail)}</dd></div>`).join('')}</dl>${knowledgeAdminPanel(key)}</div>`;
+  const facts = (items, key, places = false) => `<div class="strategy-knowledge"><div class="strategy-knowledge-heading"><small>Approved strategy</small><div><span data-knowledge-position="${key}" aria-live="polite"></span><button type="button" data-knowledge-slide="previous" data-knowledge-key="${key}" aria-label="Previous ${key} strategies">←</button><button type="button" data-knowledge-slide="next" data-knowledge-key="${key}" aria-label="Next ${key} strategies">→</button></div></div><dl class="strategy-facts${places ? ' strategy-places' : ''}" data-knowledge-track="${key}" role="region" aria-label="Approved ${key} strategies">${items.map(item => `<div>${item.source === 'APPROVED_ADMIN' ? '<small class="knowledge-provenance">Approved Admin Knowledge</small>' : ''}<dt>${item.label ? `<em>${esc(item.label)}</em> ` : ''}${esc(item.title)}</dt><dd>${esc(item.detail)}</dd></div>`).join('')}</dl></div>`;
   return `<section class="growth-timeline simple-timeline unified-growth" aria-labelledby="growth-timeline-title">
     <header><h2 id="growth-timeline-title">Growth Plan</h2><p class="strategy-plan-status">Organic pilot · still to be tested</p></header>
     <ol class="strategy-flow" aria-label="Growth strategy flow">
@@ -734,6 +734,7 @@ function growthTimelinePanel() {
       <div class="timeline-track" aria-label="Growth plan steps">${plan.stages.map((stage,i) => `<button class="timeline-stop ${stage.id === selected.id ? "selected" : ""}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="timeline-stage-detail"><span class="timeline-node">${i+1}</span><strong>${esc(stage.label)}</strong><span class="timeline-window">${esc(stage.window)}</span>${stage.id === plan.currentStage ? '<small>Start here</small>' : i === 1 ? '<small>Can start in parallel</small>' : ''}</button>`).join("")}</div>
       </li>
     </ol>
+    ${knowledgeAdminPanel()}
     <article id="timeline-stage-detail" class="simple-step" aria-label="Selected growth step"><h3>${esc(selected.title)}</h3><p>${esc(selected.outcome)}</p><details class="timeline-more"><summary>View tasks &amp; details</summary><div class="timeline-more-body"><div class="timeline-task-list">${selected.taskIds.map(id => {const t=data.tasks.find(t=>t.id===id);return t ? `<button data-task-detail="${esc(id)}"><span><strong>${esc(growthTaskTitle(t))}</strong><small>${esc(label(taskStatus(t)))}</small></span><span aria-hidden="true">→</span></button>` : '';}).join("")}</div><dl><dt>Starts when</dt><dd>${esc(selected.start)}</dd><dt>Ready for the next step</dt><dd>${esc(selected.gate)}</dd><dt>Can happen alongside</dt><dd>${esc(selected.parallel)}</dd><dt>Up next</dt><dd>${esc(selected.next)}</dd></dl></div><p class="subtle">${esc(plan.timingNote)}</p><button class="text-btn" data-doc="01_STRATEGY/GROWTH_PLAN.md">Read the saved strategy ↗</button></details></article>
 
     <details class="strategy-reference"><summary>Measurement definitions &amp; sources</summary><div class="strategy-reference-body"><div class="strategy-channel-list">${channels.map(c=>`<article><div><strong>${esc(c.name)}</strong><small>${esc(c.priority)}</small></div><p>${esc(c.strategy)}</p><p class="channel-measure"><b>Track:</b> ${esc(c.measure)}</p></article>`).join("")}</div><aside><h3>Keep the learning honest</h3><ul><li>Judge genuine paying customers, not views alone.</li><li>Give each creator a full observation window before judging results.</li><li>AI prepares the work; the owner supplies decisions or access.</li><li>Publishing requires a supported, authorized account.</li></ul><p>Referrals follow real customer value. Paid growth follows organic evidence, sound economics and exact approval.</p><div>${docButton("02_RESEARCH/GROWTH_DASHBOARD_RESEARCH.md","Research and sources")}${docButton("08_EXPERIMENTS/LEARNINGS.md","All recorded lessons")}</div></aside></div></details>
@@ -753,23 +754,27 @@ let strategyQuestionStart = 0;
 function strategyQuestionVisibleCount() {
   return window.matchMedia('(max-width: 600px)').matches ? 1 : window.matchMedia('(max-width: 900px)').matches ? 2 : 3;
 }
-function knowledgeAdminPanel(category) {
-  const entries = Object.values(sharedKnowledge).filter(item => item.category === category && item.status !== 'PROMOTED');
-  return `<details class="knowledge-admin" data-knowledge-category="${category}"><summary>Admin Strategy Knowledge <small>${entries.length ? `· ${entries.length} in review` : '· add or review'}</small></summary><div class="knowledge-admin-body"><p>New information stays outside the strategy brain until reviewed, approved and promoted by AI.</p><form data-knowledge-form="${category}"><label>Title <input name="title" maxlength="100" required></label><label>Knowledge or strategy <textarea name="detail" maxlength="240" required></textarea></label><label>Source or reason <textarea name="basis" maxlength="500" required></textarea></label><button class="quiet" type="submit">Add draft</button></form><div class="knowledge-list">${entries.map(item => `<article data-knowledge-item="${esc(item.id)}"><strong>${esc(item.title)}</strong><span>${esc(item.status.replaceAll('_',' '))}</span><p>${esc(item.detail)}</p><small>${esc(item.basis)}</small><div class="knowledge-actions">${['DRAFT','PENDING_REVIEW','REVIEWED','APPROVED','REJECTED'].includes(item.status) ? `<button type="button" data-knowledge-action="edit" data-knowledge-id="${esc(item.id)}">Edit</button><button type="button" data-knowledge-action="delete" data-knowledge-id="${esc(item.id)}">Delete</button>` : ''}${['DRAFT','REJECTED'].includes(item.status) ? `<button type="button" data-knowledge-action="submit" data-knowledge-id="${esc(item.id)}">Submit for review</button>` : ''}${item.status === 'PENDING_REVIEW' ? `<button type="button" data-knowledge-action="review" data-knowledge-id="${esc(item.id)}">Mark reviewed</button><button type="button" data-knowledge-action="reject" data-knowledge-id="${esc(item.id)}">Reject</button>` : ''}${item.status === 'REVIEWED' ? `<button type="button" data-knowledge-action="approve" data-knowledge-id="${esc(item.id)}">Approve</button><button type="button" data-knowledge-action="reject" data-knowledge-id="${esc(item.id)}">Reject</button>` : ''}${item.status === 'APPROVED' ? '<small>Awaiting AI promotion into the permanent plan</small>' : ''}</div></article>`).join('')}</div><p class="knowledge-status" role="status"></p></div></details>`;
+function knowledgeAdminPanel() {
+  const entries = Object.values(sharedKnowledge).filter(item => item.status !== 'PROMOTED');
+  const names = {whatWeKnow:'What we know',whereCustomersAre:'Where customers are',howWeReachThem:'How we reach them'};
+  return `<details class="knowledge-admin knowledge-inbox"><summary>Admin Strategy Knowledge <small>${entries.length ? `· ${entries.length} idea${entries.length===1?'':'s'} in the inbox` : '· share an idea'}</small></summary><div class="knowledge-admin-body"><p>Put your ideas in your own words. AI will organize them into proposed strategy cards for your review. Nothing enters the permanent plan until you approve it.</p><form data-knowledge-form><label for="knowledge-idea">Your ideas</label><textarea id="knowledge-idea" name="idea" rows="5" maxlength="1500" required placeholder="What have you noticed? What should we try, change, or stop?"></textarea><button class="quiet" type="submit">Send ideas to AI</button></form><div class="knowledge-list">${entries.map(item => `<article data-knowledge-item="${esc(item.id)}"><div class="knowledge-item-heading"><strong>${item.status === 'REVIEWED' || item.status === 'APPROVED' ? 'AI organized this idea' : 'Your idea'}</strong><span>${esc(item.status.replaceAll('_',' '))}</span></div><p class="knowledge-raw">${esc(item.idea || item.detail || '')}</p>${item.proposals?.length ? `<div class="knowledge-proposals">${item.proposals.map(p => `<div><small>${esc(names[p.category] || p.category)}</small><strong>${esc(p.title)}</strong><p>${esc(p.detail)}</p></div>`).join('')}</div>` : ''}<div class="knowledge-actions">${['DRAFT','PENDING_REVIEW','REVIEWED','APPROVED','REJECTED'].includes(item.status) ? `<button type="button" data-knowledge-action="edit" data-knowledge-id="${esc(item.id)}">Edit</button><button type="button" data-knowledge-action="delete" data-knowledge-id="${esc(item.id)}">Delete</button>` : ''}${['DRAFT','REJECTED'].includes(item.status) ? `<button type="button" data-knowledge-action="submit" data-knowledge-id="${esc(item.id)}">Send to AI for review</button>` : ''}${item.status === 'PENDING_REVIEW' ? '<small>AI will organize this on the next run.</small>' : ''}${item.status === 'REVIEWED' ? `<button type="button" data-knowledge-action="approve" data-knowledge-id="${esc(item.id)}">Approve proposed cards</button><button type="button" data-knowledge-action="reject" data-knowledge-id="${esc(item.id)}">Reject</button>` : ''}${item.status === 'APPROVED' ? '<small>Approved · awaiting permanent plan update</small>' : ''}</div></article>`).join('')}</div><p class="knowledge-status" role="status"></p></div></details>`;
 }
 async function saveKnowledge(item, prior = null) {
   const url = `https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(item.id)}.json`;
   const current = await fetch(url, {headers:{'X-Firebase-ETag':'true'},cache:'no-store'});
   if (!current.ok) throw new Error('Could not check the shared record.');
   const actual = await current.json();
-  const actualItem = actual ? JSON.parse(actual.resolution) : null;
-  if (JSON.stringify(actualItem) !== JSON.stringify(prior)) throw new Error('This item changed elsewhere. Refresh and try again.');
-  const record = item.status === 'DELETED' ? null : {id:item.id,title:item.title,original:actual?.original || JSON.stringify({kind:'knowledge',category:item.category}),resolution:JSON.stringify(item),status:'RESOLVED',submittedAt:actual?.submittedAt || item.createdAt};
+  const actualStored = actual ? JSON.parse(actual.resolution) : null;
+  const actualIdea = actual ? JSON.parse(actual.original).idea || actualStored.idea || '' : '';
+  const expectedStored = prior ? Object.fromEntries(Object.entries(prior).filter(([key]) => key !== 'idea')) : null;
+  if (JSON.stringify(actualStored) !== JSON.stringify(expectedStored) || (prior && actualIdea !== prior.idea)) throw new Error('This item changed elsewhere. Refresh and try again.');
+  const {idea,...stored} = item;
+  const record = item.status === 'DELETED' ? null : {id:item.id,title:'Strategy ideas',original:JSON.stringify({kind:'knowledge',idea}),resolution:JSON.stringify(stored),status:'RESOLVED',submittedAt:actual?.submittedAt || item.createdAt};
   const response = await fetch(url, {method:item.status === 'DELETED' ? 'DELETE' : 'PUT',headers:{'Content-Type':'application/json','If-Match':current.headers.get('ETag') || 'null_etag'},body:record ? JSON.stringify(record) : undefined});
   if (!response.ok) throw new Error(response.status === 412 ? 'This item changed elsewhere. Refresh and try again.' : 'Could not save the item.');
   if (item.status === 'DELETED') {delete sharedKnowledge[item.id];delete sharedAdminActions[item.id];} else {sharedKnowledge[item.id] = item;sharedAdminActions[item.id] = record;}
   growth();
-  const drawer = document.querySelector(`[data-knowledge-category="${item.category}"]`);
+  const drawer = document.querySelector('.knowledge-inbox');
   if (drawer) drawer.open = true;
 }
 function setupKnowledgeSliders() {
@@ -777,9 +782,9 @@ function setupKnowledgeSliders() {
     const update = () => {
       const cards = [...track.children];
       if (!cards.length) return;
-      const step = cards[1] ? cards[1].offsetLeft - cards[0].offsetLeft : track.clientWidth;
-      const visible = Math.max(1, Math.round(track.clientWidth / step));
-      const start = Math.min(cards.length - 1, Math.round(track.scrollLeft / step));
+      const visible = window.matchMedia('(max-width: 900px)').matches ? 1 : 3;
+      const step = cards[visible] ? cards[visible].offsetLeft - cards[0].offsetLeft : track.clientWidth;
+      const start = Math.min(cards.length - 1, Math.round(track.scrollLeft / step) * visible);
       const key = track.dataset.knowledgeTrack;
       const position = document.querySelector(`[data-knowledge-position="${key}"]`);
       if (position) position.textContent = `${start + 1}–${Math.min(cards.length, start + visible)} of ${cards.length}`;
@@ -915,7 +920,7 @@ async function loadSharedDashboardState() {
     sharedAdminActions = Object.fromEntries(Object.entries(shared?.adminActions || {}).filter(([id, item]) => /^[A-Za-z0-9-]{1,40}$/.test(id) && ["RESOLVED", "ARCHIVED"].includes(item?.status)));
     sharedKnowledge = Object.fromEntries(Object.entries(sharedAdminActions).flatMap(([id, action]) => {
       if (!/^SK-[A-Za-z0-9-]{1,36}$/.test(id)) return [];
-      try { const original = JSON.parse(action.original), item = JSON.parse(action.resolution); return original.kind === 'knowledge' && item.id === id && ['DRAFT','PENDING_REVIEW','REVIEWED','APPROVED','REJECTED','PROMOTED'].includes(item.status) ? [[id,item]] : []; }
+      try { const original = JSON.parse(action.original), item = JSON.parse(action.resolution); return original.kind === 'knowledge' && item.id === id && ['DRAFT','PENDING_REVIEW','REVIEWED','APPROVED','REJECTED','PROMOTED'].includes(item.status) ? [[id,{...item,idea:original.idea || item.idea || ''}]] : []; }
       catch { return []; }
     }));
     if (shared && typeof shared.overviewNote === "string")
@@ -1527,19 +1532,17 @@ document.addEventListener("click", async (event) => {
     const action = knowledgeAction.dataset.knowledgeAction;
     let next = {...prior, updatedAt:new Date().toISOString()};
     if (action === 'edit') {
-      const title = prompt('Strategy title', prior.title);
-      if (title === null) return;
-      const detail = prompt('Knowledge or strategy', prior.detail);
-      if (detail === null) return;
-      const basis = prompt('Source or reason', prior.basis);
-      if (basis === null) return;
-      if (!title.trim() || !detail.trim() || !basis.trim() || title.length > 100 || detail.length > 240 || basis.length > 500) { alert('Enter a title, knowledge and source within the field limits.'); return; }
-      next = {...next,title:title.trim(),detail:detail.trim(),basis:basis.trim(),status:'DRAFT'};
+      const form = knowledgeAction.closest('.knowledge-inbox').querySelector('[data-knowledge-form]');
+      form.dataset.editId = prior.id;
+      form.elements.idea.value = prior.idea || prior.detail || '';
+      form.querySelector('button[type="submit"]').textContent = 'Save changes and send to AI';
+      form.elements.idea.focus();
+      return;
     } else if (action === 'delete') {
       if (!confirm('Delete this unapproved knowledge item?')) return;
       next.status = 'DELETED';
     } else {
-      next.status = {submit:'PENDING_REVIEW',review:'REVIEWED',approve:'APPROVED',reject:'REJECTED'}[action];
+      next.status = {submit:'PENDING_REVIEW',approve:'APPROVED',reject:'REJECTED'}[action];
       if (!next.status) return;
       if (action === 'approve' && !confirm('Approve this reviewed item for AI promotion into the permanent strategy?')) return;
     }
@@ -1552,9 +1555,10 @@ document.addEventListener("click", async (event) => {
   if (knowledgeSlide) {
     const track = document.querySelector(`[data-knowledge-track="${knowledgeSlide.dataset.knowledgeKey}"]`);
     const cards = [...track.querySelectorAll(':scope > div')];
-    const visible = Math.max(1, Math.round(track.clientWidth / (cards[0]?.getBoundingClientRect().width || track.clientWidth)));
-    const current = Math.round(track.scrollLeft / ((cards[1]?.offsetLeft || 0) - (cards[0]?.offsetLeft || 0) || track.clientWidth));
-    const next = Math.max(0, Math.min(cards.length - visible, current + (knowledgeSlide.dataset.knowledgeSlide === 'next' ? visible : -visible)));
+    const visible = window.matchMedia('(max-width: 900px)').matches ? 1 : 3;
+    const step = cards[visible] ? cards[visible].offsetLeft - cards[0].offsetLeft : track.clientWidth;
+    const current = Math.round(track.scrollLeft / step) * visible;
+    const next = Math.max(0, Math.min(Math.ceil(cards.length / visible) - 1, Math.floor(current / visible) + (knowledgeSlide.dataset.knowledgeSlide === 'next' ? 1 : -1))) * visible;
     track.scrollTo({left: cards[next].offsetLeft - cards[0].offsetLeft, behavior:'smooth'});
     return;
   }
@@ -1600,12 +1604,13 @@ document.addEventListener("submit", async (event) => {
   const knowledgeForm = event.target.closest('[data-knowledge-form]');
   if (knowledgeForm) {
     event.preventDefault();
-    const title = knowledgeForm.elements.title.value.trim(), detail = knowledgeForm.elements.detail.value.trim(), basis = knowledgeForm.elements.basis.value.trim();
-    if (!title || !detail || !basis) return;
-    const id = `SK-${crypto.randomUUID()}`;
-    const item = {id,category:knowledgeForm.dataset.knowledgeForm,title,detail,basis,status:'DRAFT',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+    const idea = knowledgeForm.elements.idea.value.trim();
+    if (!idea || idea.length > 1500) return;
+    const prior = knowledgeForm.dataset.editId ? sharedKnowledge[knowledgeForm.dataset.editId] : null;
+    const id = prior?.id || `SK-${crypto.randomUUID()}`;
+    const item = {id,idea,status:'PENDING_REVIEW',createdAt:prior?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString(),proposals:[]};
     const status = knowledgeForm.closest('.knowledge-admin').querySelector('.knowledge-status');
-    try { await saveKnowledge(item); } catch (error) { status.textContent = error.message; }
+    try { await saveKnowledge(item,prior); } catch (error) { status.textContent = error.message; }
     return;
   }
   if (event.target?.id !== "action-resolution") return;
