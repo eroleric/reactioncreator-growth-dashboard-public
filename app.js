@@ -410,7 +410,7 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]];
+  const tabs = [["roadmap","Roadmap"],["work","AI work"],["discovery","Creator discovery"],["strategy","Growth plan"],["expected","Expected Task Results"]];
   if (adminActionCandidates().length) tabs.unshift(["actions", "Admin Actions"]);
   return `<nav class="growth-tabs" aria-label="Growth sections">${tabs.map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
 }
@@ -436,6 +436,14 @@ function growthExpectedResults() {
   $("#expected-result-search").addEventListener("input", render);
   $("#expected-result-confidence").addEventListener("change", render);
   render();
+}
+function growthDiscovery() {
+  const discovery = data.creatorDiscovery || {batchCount:0,scanned:0,discoveryLeads:0,suitable:0,reservesRejected:0,routes:{socialDm:0,publicEmail:0,newRoute:0}};
+  const latest = discovery.latest;
+  const source = latest ? `${latest.platform} · ${latest.source}` : "No completed discovery batch yet";
+  const learning = latest?.learning || "Complete a bounded 10–20 profile batch to record the first evidence-backed learning.";
+  const next = latest?.nextAction || "Run a bounded public discovery batch; deduplicate against the private prospect record and record only aggregate results here.";
+  $("#main").innerHTML = head("Creator discovery", "Batch-level discovery evidence for the existing Growth Brain. Individual prospects and contact details stay private.") + growthNavigation() + `<div class="growth-workspace discovery-workspace"><section class="discovery-intro"><div><div class="eyebrow">LATEST BATCH</div><h2>${esc(source)}</h2><p>${esc(learning)}</p></div><span class="tag neutral">${esc(latest?.status || "No batch")}</span></section><section class="discovery-stats"><article class="stat"><div class="label">Scanned</div><div class="number">${discovery.scanned}</div><div class="note">Completed batches only</div></article><article class="stat"><div class="label">Discovery leads</div><div class="number">${discovery.discoveryLeads}</div><div class="note">Evidence-backed, not contacted</div></article><article class="stat"><div class="label">Suitable</div><div class="number">${discovery.suitable}</div><div class="note">Still requires invitation review</div></article><article class="stat"><div class="label">Reserve / rejected</div><div class="number">${discovery.reservesRejected}</div><div class="note">Not counted toward outreach</div></article></section><section class="panel discovery-routes"><div class="panel-head"><div><div class="eyebrow">ROUTE MIX</div><h2>Public discovery routes</h2><p>Routes are discovery signals, not permission to message.</p></div></div><div class="discovery-route-grid"><div><strong>${discovery.routes.socialDm}</strong><span>Social DM</span></div><div><strong>${discovery.routes.publicEmail}</strong><span>Public email</span></div><div><strong>${discovery.routes.newRoute}</strong><span>New route</span></div></div></section><section class="panel discovery-next"><div class="eyebrow">NEXT AI ACTION</div><p>${esc(next)}</p><small>${discovery.batchCount} completed ${discovery.batchCount === 1 ? "batch" : "batches"}. The private batch ledger and prospect records are the execution source.</small></section></div>`;
 }
 function growthActions() {
   const actions = adminActionCandidates(), pending = submittedAdminActions(), archived = archivedAdminActions();
@@ -575,6 +583,7 @@ function growth() {
     growthTab = "work";
   }
   if (growthTab === "expected") return growthExpectedResults();
+  if (growthTab === "discovery") return growthDiscovery();
   if (growthTab === "tasks") return plan(true);
   if (growthTab === "rhythm") growthTab = "work";
   if (!["work", "strategy", "roadmap"].includes(growthTab)) { growthTab = "work"; }
