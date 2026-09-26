@@ -52,6 +52,7 @@ let data,
   failedAttempts = 0,
   planTaskView = "all",
   growthTab = "work",
+  creatorDiscoveryTabVisible = false,
   sharedAdminActions = {},
   sharedKnowledge = {},
   pendingAttention = null,
@@ -64,6 +65,9 @@ let data,
     updates: [],
   },
   noteSyncStatus = "Loading shared note…";
+try {
+  creatorDiscoveryTabVisible = localStorage.getItem("rc-growth-creator-discovery") === "visible";
+} catch {}
 const saveTimers = new Map();
 const debounceSave = (key, work, delay = 700) => {
   clearTimeout(saveTimers.get(key));
@@ -412,9 +416,11 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  const tabs = [["roadmap","Roadmap"],["work","AI work"],["discovery","Creator discovery"],["strategy","Growth plan"],["expected","Expected Task Results"]];
+  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]];
+  if (creatorDiscoveryTabVisible) tabs.splice(2, 0, ["discovery", "Creator discovery"]);
   if (adminActionCandidates().length) tabs.unshift(["actions", "Admin Actions"]);
-  return `<nav class="growth-tabs" aria-label="Growth sections">${tabs.map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}</nav>`;
+  const discoveryLabel = creatorDiscoveryTabVisible ? "Hide Creator Discovery tab" : "Show Creator Discovery tab";
+  return `<nav class="growth-tabs" aria-label="Growth sections">${tabs.map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}<button class="growth-tab-visibility" data-growth-discovery-toggle aria-label="${discoveryLabel}" aria-pressed="${creatorDiscoveryTabVisible}" title="${discoveryLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.8"></circle></svg></button></nav>`;
 }
 function expectedResultBody(result) {
   const range = result.expectedImpact.range;
@@ -1607,6 +1613,14 @@ document.addEventListener("click", async (event) => {
 
   const undo = event.target.closest("[data-strategy-undo]");
   if (undo) { await undoStrategyAnswer(undo); return; }
+  const discoveryToggle = event.target.closest("[data-growth-discovery-toggle]");
+  if (discoveryToggle) {
+    creatorDiscoveryTabVisible = !creatorDiscoveryTabVisible;
+    try { localStorage.setItem("rc-growth-creator-discovery", creatorDiscoveryTabVisible ? "visible" : "hidden"); } catch {}
+    if (!creatorDiscoveryTabVisible && growthTab === "discovery") growthTab = "work";
+    growth();
+    return;
+  }
   const tab = event.target.closest("[data-growth-tab]");
   if (tab) { growthTab = tab.dataset.growthTab; growth(); return; }
   const milestone = event.target.closest("[data-growth-milestone]");
