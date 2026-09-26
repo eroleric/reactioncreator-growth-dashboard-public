@@ -796,7 +796,7 @@ function taskTimelineContext(t) {
 }
 const strategyDrafts = new Map();
 const strategyNotices = new Map();
-let strategyQuestionStart = 0;
+const strategyQuestionStarts = {learning:0, strategy:0};
 function strategyQuestionVisibleCount() {
   return window.matchMedia('(max-width: 600px)').matches ? 1 : window.matchMedia('(max-width: 900px)').matches ? 2 : 3;
 }
@@ -840,44 +840,56 @@ function setupKnowledgeSliders() {
     update();
   });
 }
-function updateStrategyQuestionSlider() {
-  const grid = document.querySelector('.strategy-question-grid');
-  if (!grid) return;
+function updateStrategyQuestionSlider(section) {
+  const grid = section.querySelector('.strategy-question-grid');
   const cards = [...grid.querySelectorAll('[data-strategy-question]')];
   const visible = Math.min(strategyQuestionVisibleCount(), cards.length);
   const step = cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 0;
-  strategyQuestionStart = Math.max(0, Math.min(cards.length - visible, step ? Math.round(grid.scrollLeft / step) : 0));
-  const position = document.querySelector('.strategy-question-position');
-  if (position) position.textContent = `${strategyQuestionStart + 1}–${strategyQuestionStart + visible} of ${cards.length}`;
-  const previous = document.querySelector('[data-strategy-slide="previous"]');
-  const next = document.querySelector('[data-strategy-slide="next"]');
-  if (previous) previous.disabled = strategyQuestionStart === 0;
-  if (next) next.disabled = strategyQuestionStart >= cards.length - visible;
+  const kind = section.dataset.questionKind;
+  const start = Math.max(0, Math.min(cards.length - visible, step ? Math.round(grid.scrollLeft / step) : 0));
+  strategyQuestionStarts[kind] = start;
+  const position = section.querySelector('.strategy-question-position');
+  if (position) position.textContent = `${start + 1}–${start + visible} of ${cards.length}`;
+  const previous = section.querySelector('[data-strategy-slide="previous"]');
+  const next = section.querySelector('[data-strategy-slide="next"]');
+  if (previous) previous.disabled = start === 0;
+  if (next) next.disabled = start >= cards.length - visible;
 }
 function setupStrategyQuestionSlider() {
-  const grid = document.querySelector('.strategy-question-grid');
-  if (!grid) return;
-  const cards = [...grid.querySelectorAll('[data-strategy-question]')];
-  const visible = Math.min(strategyQuestionVisibleCount(), cards.length);
-  strategyQuestionStart = Math.min(strategyQuestionStart, cards.length - visible);
-  grid.scrollLeft = cards[strategyQuestionStart].offsetLeft - cards[0].offsetLeft;
-  grid.addEventListener('scroll', updateStrategyQuestionSlider, {passive:true});
-  updateStrategyQuestionSlider();
+  document.querySelectorAll('.strategy-questions').forEach(section => {
+    const grid = section.querySelector('.strategy-question-grid');
+    const cards = [...grid.querySelectorAll('[data-strategy-question]')];
+    const visible = Math.min(strategyQuestionVisibleCount(), cards.length);
+    const kind = section.dataset.questionKind;
+    const start = Math.max(0, Math.min(strategyQuestionStarts[kind], cards.length - visible));
+    grid.scrollLeft = cards[start].offsetLeft - cards[0].offsetLeft;
+    grid.addEventListener('scroll', () => updateStrategyQuestionSlider(section), {passive:true});
+    updateStrategyQuestionSlider(section);
+  });
 }
 function strategyQuestionsPanel() {
-  const questions = data.growthSystem.learningEngine?.active || data.growthSystem.strategyQuestions?.active || [];
+  return questionPanel('learning') + questionPanel('strategy');
+}
+function questionPanel(kind) {
+  const questions = kind === 'learning' ? data.growthSystem.learningEngine?.active || [] : data.growthSystem.strategyQuestions?.active || [];
   if (!questions.length) return "";
-  return `<section class="strategy-questions" aria-labelledby="strategy-questions-title"><header><div><h3 id="strategy-questions-title">Daily AI Questions</h3><p>${questions.length} quick ${questions.length===1?"question":"questions"} to inform the next review. ${questions.filter(q=>sharedAdminActions[q.id]).length} / ${questions.length} saved.</p></div><div class="strategy-question-controls"><span class="strategy-question-position" aria-live="polite"></span><button type="button" data-strategy-slide="previous" aria-label="Previous question">←</button><button type="button" data-strategy-slide="next" aria-label="Next question">→</button></div></header><div class="strategy-question-grid" role="region" aria-label="Daily AI questions">${questions.map(q => {
+  const title = kind === 'learning' ? 'Daily AI Questions' : 'Help shape the next tasks';
+  const description = kind === 'learning' ? `${questions.length} quick ${questions.length===1?"question":"questions"} to inform the next review.` : 'Answer what you can. AI reviews your choices on its next run and brings back new decisions.';
+  return `<section class="strategy-questions" data-question-kind="${kind}" aria-labelledby="${kind}-questions-title"><header><div><h3 id="${kind}-questions-title">${title}</h3><p>${description} ${questions.filter(q=>sharedAdminActions[q.id]).length} / ${questions.length} saved.</p></div><div class="strategy-question-controls"><span class="strategy-question-position" aria-live="polite"></span><button type="button" data-strategy-slide="previous" aria-label="Previous ${kind} question">←</button><button type="button" data-strategy-slide="next" aria-label="Next ${kind} question">→</button></div></header><div class="strategy-question-grid" role="region" aria-label="${title}">${questions.map(q => {
     const saved = sharedAdminActions[q.id];
     let answer;
-    if(saved) { try {answer=parseLearningAnswer(saved.resolution);} catch {answer={value:"Saved answer",comment:""};} }
+    if(saved) { try {answer=kind === 'learning' ? parseLearningAnswer(saved.resolution) : parseStrategyAnswer(saved.resolution);} catch {answer={value:"Saved answer",answer:"Saved answer",comment:""};} }
     const draft = strategyDrafts.get(q.id) || {answer:'',comment:''};
-    return `<article data-strategy-question="${esc(q.id)}"><h4 id="question-${esc(q.id)}">${esc(q.question)}</h4>${saved ? `<p class="strategy-answer" role="status">${esc(q.choices?.find(choice=>choice.value===answer.value)?.label || answer.value)} · ${saved.status === "ARCHIVED" ? "Added to the AI Brain" : "Saved for the next AI run"}</p>${answer.comment ? `<p class="strategy-saved-comment">${esc(answer.comment)}</p>` : ''}${saved.status === "RESOLVED" ? `<button class="text-btn" data-strategy-undo="${esc(q.id)}">Undo answer</button><p class="strategy-save-status subtle" role="status"></p>` : '<p class="subtle">Thanks — this answer now informs future questions.</p>'}` : `<form data-strategy-form="${esc(q.id)}" aria-labelledby="question-${esc(q.id)}"><div class="strategy-choices" role="group" aria-label="Choose an answer">${q.choices.map(choice=>`<label class="strategy-choice"><input type="radio" name="answer-${esc(q.id)}" value="${esc(choice.value)}" ${draft.answer===choice.value?'checked':''}><span>${esc(choice.label)}</span></label>`).join('')}</div><details class="strategy-comment" ${draft.comment ? 'open' : ''}><summary>Add a comment <span>(optional)</span></summary><label class="sr-only" for="comment-${esc(q.id)}">Optional comment</label><textarea id="comment-${esc(q.id)}" name="comment" rows="2" maxlength="1000" placeholder="Anything you’d like AI to consider…">${esc(draft.comment)}</textarea></details><button class="quiet strategy-save" type="submit" ${draft.answer?'':'disabled'}>Save answer</button><p role="status" class="subtle strategy-save-status">${esc(strategyNotices.get(q.id) || '')}</p></form>`}</article>`;
+    const choices = kind === 'learning' ? q.choices : [{value:'YES',label:'Yes'},{value:'NO',label:'No'},{value:'OTHER',label:'Other'}];
+    const savedLabel = saved ? (kind === 'learning' ? q.choices?.find(choice=>choice.value===answer.value)?.label || answer.value : {YES:'Yes',NO:'No',OTHER:'Other'}[answer.answer] || answer.answer) : '';
+    const archivedLabel = kind === 'learning' ? 'Added to the AI Brain' : 'Reviewed. Refresh snapshot for the next question.';
+    return `<article data-strategy-question="${esc(q.id)}"><h4 id="question-${esc(q.id)}">${esc(q.question)}</h4>${kind === 'strategy' ? `<p>${esc(q.why)}</p>` : ''}${saved ? `<p class="strategy-answer" role="status">${esc(savedLabel)} · ${saved.status === "ARCHIVED" ? archivedLabel : "Saved for the next AI run"}</p>${answer.comment ? `<p class="strategy-saved-comment">${esc(answer.comment)}</p>` : ''}${saved.status === "RESOLVED" ? `<button class="text-btn" data-strategy-undo="${esc(q.id)}">Undo answer</button><p class="strategy-save-status subtle" role="status"></p>` : '<p class="subtle">Reviewed answers can no longer be undone.</p>'}` : `<form data-strategy-form="${esc(q.id)}" data-question-kind="${kind}" aria-labelledby="question-${esc(q.id)}"><div class="strategy-choices" role="group" aria-label="Choose an answer">${choices.map(choice=>`<label class="strategy-choice"><input type="radio" name="answer-${esc(q.id)}" value="${esc(choice.value)}" ${draft.answer===choice.value?'checked':''}><span>${esc(choice.label)}</span></label>`).join('')}</div><details class="strategy-comment" ${draft.comment ? 'open' : ''}><summary>Add a comment <span>(optional)</span></summary><label class="sr-only" for="comment-${esc(q.id)}">Optional comment</label><textarea id="comment-${esc(q.id)}" name="comment" rows="2" maxlength="1000" placeholder="Anything you’d like AI to consider…">${esc(draft.comment)}</textarea></details><button class="quiet strategy-save" type="submit" ${draft.answer?'':'disabled'}>Save answer</button><p role="status" class="subtle strategy-save-status">${esc(strategyNotices.get(q.id) || '')}</p></form>`}</article>`;
   }).join("")}</div></section>`;
 }
 async function submitStrategyAnswer(form) {
   const id = form.dataset.strategyForm;
-  const item = (data.growthSystem.learningEngine?.active || data.growthSystem.strategyQuestions.active).find(q => q.id === id);
+  const kind = form.dataset.questionKind;
+  const item = (kind === 'learning' ? data.growthSystem.learningEngine?.active || [] : data.growthSystem.strategyQuestions?.active || []).find(q => q.id === id);
   const choice = form.querySelector('input:checked')?.value;
   const comment = form.querySelector('textarea').value;
   if (!item || !choice || sharedAdminActions[id]) return;
@@ -886,13 +898,13 @@ async function submitStrategyAnswer(form) {
   controls.forEach(c => c.disabled=true);
   status.textContent='Saving…';
   try {
-    const resolution=encodeLearningAnswer(choice,comment);
+    const resolution=kind === 'learning' ? encodeLearningAnswer(choice,comment) : encodeStrategyAnswer(choice,comment);
     const url=`https://reaction-creator-default-rtdb.firebaseio.com/dashboard/adminActions/${encodeURIComponent(id)}.json`;
     const current=await fetch(url,{headers:{'X-Firebase-ETag':'true'},cache:'no-store'});
     if(!current.ok) throw new Error('Could not check saved answers. Try again.');
     const existing=await current.json();
     if(existing) {sharedAdminActions[id]=existing;growth();return;}
-    const record={id,title:item.question,status:'RESOLVED',original:JSON.stringify({kind:'learning',item}),resolution,submittedAt:new Date().toISOString()};
+    const record={id,title:item.question,status:'RESOLVED',original:JSON.stringify({kind,item}),resolution,submittedAt:new Date().toISOString()};
     const response=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json','If-Match':current.headers.get('ETag') || 'null_etag'},body:JSON.stringify(record)});
     if(!response.ok) throw new Error(response.status===412?'Another device changed this answer. Refresh to see it.':'Answer was not saved. Please try again.');
     sharedAdminActions[id]=record;
@@ -916,7 +928,7 @@ async function undoStrategyAnswer(button) {
       const response=await fetch(url,{method:'DELETE',headers:{'If-Match':current.headers.get('ETag') || 'null_etag'}});
       if(!response.ok) throw new Error(response.status===412?'The answer changed during undo. Refresh to see it.':'Could not undo. Your answer is still saved.');
     }
-    const previous=parseLearningAnswer(saved.resolution);
+    const previous=JSON.parse(saved.original).kind === 'learning' ? parseLearningAnswer(saved.resolution) : parseStrategyAnswer(saved.resolution);
     strategyDrafts.set(id,{answer:'',comment:previous.comment});
     strategyNotices.set(id,'Answer undone. Choose again when ready.');
     delete sharedAdminActions[id];growth();
@@ -1622,12 +1634,14 @@ document.addEventListener("click", async (event) => {
   }
   const slider = event.target.closest('[data-strategy-slide]');
   if (slider) {
-    const grid = document.querySelector('.strategy-question-grid');
+    const section = slider.closest('.strategy-questions');
+    const grid = section.querySelector('.strategy-question-grid');
     const cards = [...grid.querySelectorAll('[data-strategy-question]')];
     const visible = Math.min(strategyQuestionVisibleCount(), cards.length);
     const direction = slider.dataset.strategySlide === 'next' ? 1 : -1;
-    strategyQuestionStart = Math.max(0, Math.min(cards.length - visible, strategyQuestionStart + direction));
-    grid.scrollTo({left: cards[strategyQuestionStart].offsetLeft - cards[0].offsetLeft, behavior:'smooth'});
+    const kind = section.dataset.questionKind;
+    strategyQuestionStarts[kind] = Math.max(0, Math.min(cards.length - visible, strategyQuestionStarts[kind] + direction));
+    grid.scrollTo({left: cards[strategyQuestionStarts[kind]].offsetLeft - cards[0].offsetLeft, behavior:'smooth'});
     return;
   }
   const timeline = event.target.closest("[data-timeline-stage], [data-open-timeline]");
