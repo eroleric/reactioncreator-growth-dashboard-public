@@ -1,5 +1,5 @@
 import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeLearningAnswer } from "./strategy-answer.js?v=20260925-learning-1";
-import { mountOutreach } from './outreach.js?v=20260926-1';
+import { mountOutreach, resetOutreach } from './outreach.js?v=20260926-2';
 import {metricState,periodLabel,milestoneState} from './decision-model.js?v=20260926-phase1';
 import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
@@ -320,6 +320,12 @@ function milestoneEvidence(milestone) {
   const s=milestoneState(milestone,data.metricObservations,decisionToday());
   return `<section class="milestone-evidence"><header><h3>Evidence for this milestone</h3><span class="measure-state unverified">${s.ready?'Evidence ready for review':'More evidence needed'}</span></header><p><strong>Subscriber target:</strong> ${s.targetReached===null?'Needs a current verified observation':s.targetReached?'Reached':'Not reached'}. <strong>Expansion:</strong> ${s.ready?'Ready to consider':'Not established'}.</p><div class="evidence-checks">${s.checks.map(c=>`<article><div><strong>${esc(c.title)}</strong><span class="measure-state ${c.status==='Met'?'verified':'unverified'}">${esc(c.status)}</span></div><p>${esc(c.note)}</p>${c.metricStatus?`<small>Measurement: ${esc(c.metricStatus)}</small>`:`<small>Reviewed ${esc(c.reviewedAt)} · Review by ${esc(c.reviewBy)}</small>`}<div>${c.kind==='metric'?`<button class="text-btn" data-metric-detail="${esc(c.metricId)}">View measurement ↗</button>`:`<button class="text-btn" data-doc="${esc(c.sourcePath)}">Open evidence record ↗</button>`}${c.taskIds.map(id=>`<button class="text-btn" data-task-detail="${esc(id)}">${esc(data.growthSystem.tasks[id].adminTitle)} →</button>`).join('')}</div></article>`).join('')}</div><p class="subtle">Evidence readiness is not approval to send, publish or spend. These checks do not hold independent preparation.</p></section>`;
 }
+function cohortPanel() {
+  const r=data.creatorCohortReport;
+  if(!r)return `<section class="panel"><h2>Creator cohort results</h2><p>No reviewed cohort snapshot yet. Record participation and evidence in Creator Outreach, then review and import its aggregate.</p></section>`;
+  const rate=w=>w.rate==null?`Unknown · ${w.yes}/${w.eligible} confirmed, ${w.unknown} unknown, ${w.pending} pending`:`${w.rate}% · ${w.yes}/${w.eligible}, ${w.pending} pending`;
+  return `<section class="panel"><h2>Creator cohort results</h2><p>Enrolled CRM creators only · as of ${esc(r.asOf)}${(Date.parse(decisionToday())-Date.parse(r.asOf))/86400000>7?' · Outdated':''}. Reviewed ${esc(r.reviewedAt.slice(0,10))}.</p><p>${r.enrolled} enrolled · ${r.genuine} genuine · ${r.test} test · ${r.unclassified} unclassified.</p><p>${r.activated} verified first exports · ${r.reportedOnly} reported only · ${r.noExportEvidence} without export evidence.</p><details><summary>Retention and coverage</summary><p>7-day repeat: ${rate(r.repeat)}<br>14-day paid conversion: ${rate(r.paid)}<br>Week-4 return: ${rate(r.week4)}</p><p>Exported in trailing 7 days: ${r.wec7}. Active creators in 28 days: ${r.ac28}. Complete 28-day export coverage: ${r.covered28}/${r.genuine}. Counts are confirmed minimums when coverage is incomplete. No enrolled participants means no measured cohort.</p><p>These reviewed cohort results do not replace app-wide metrics. Refreshing the dashboard does not fetch new evidence.</p></details></section>`;
+}
 function overview() {
   const actions = adminActionCandidates();
   const attentionCount = actions.length;
@@ -341,6 +347,7 @@ function overview() {
     <header class="growth-goal overview-goal"><div><small>YOUR PROJECT AT A GLANCE</small><h1>Overview</h1><p>Small steps toward your first 5 paying subscribers.</p></div><span class="tag neutral">Growth</span></header>
     ${overviewMetrics}
     ${decisionPanel()}
+    ${cohortPanel()}
     <section class="overview-workspaces" aria-label="Growth workspace">${workspace("GROWTH", "Growth & budget", "Turn real usage into paying subscribers.", "Current scope", "growth", "growth")}</section>
     <section class="overview-attention ${attentionCount ? "has-actions" : "clear"}" aria-label="Admin attention">
       ${attentionCount ? `<details><summary><span class="overview-attention-icon" aria-hidden="true">!</span><span><strong>${attentionCount} ${attentionCount === 1 ? "Admin Action needs" : "Admin Actions need"} your attention</strong><small>Decisions, access, or hands-on help</small></span><span class="overview-expand">View items <span aria-hidden="true">⌄</span></span></summary><div class="overview-attention-list">${attentionItems}</div><div class="overview-attention-footer"><button class="text-btn" type="button" data-open-${actions[0].kind}="${esc(actions[0].id)}">Open Admin Actions →</button></div></details>` : '<strong>Nothing needs your attention right now.</strong>'}
@@ -1554,6 +1561,7 @@ window.addEventListener("hashchange", navigate);
 $("#pin").focus();
 
 onAuthStateChanged(supportAuth, async (user) => {
+  resetOutreach();
   supportSession.user = user;
   supportSession.admin = false;
   supportSession.authReady = true;
