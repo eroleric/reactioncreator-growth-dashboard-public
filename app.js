@@ -1,4 +1,5 @@
 import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeLearningAnswer } from "./strategy-answer.js?v=20260925-learning-1";
+import { mountOutreach } from './outreach.js?v=20260926-1';
 import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
@@ -94,6 +95,7 @@ const titles = {
   growth: "Growth & budget",
   records: "Project records",
   support: "Customer support",
+  outreach: "Creator Outreach",
 };
 const statusClass = (s) =>
   ({
@@ -990,6 +992,15 @@ async function saveSharedTask(id, status, note, blocker) {
   adminState.taskBlockers[id] = blocker;
   await saveAdminState();
 }
+async function outreach() {
+  if (!supportSession.user) {
+    $('#main').innerHTML = head('Creator Outreach', 'Sign in to securely manage your creator database.') + '<section class="panel"><h2>Admin sign-in</h2><p>Use your existing Reaction Creator admin Google account.</p><button id="outreach-sign-in">Sign in with Google</button><p id="outreach-login-error" role="alert"></p></section>';
+    $('#outreach-sign-in').onclick = async () => { try { await signInWithPopup(supportAuth, supportProvider); } catch (error) { $('#outreach-login-error').textContent = error.message; } };
+    return;
+  }
+  const call = httpsCallable(supportFunctions, 'creatorOutreach', { timeout: 300000 });
+  await mountOutreach($('#main'), async input => (await call(input)).data);
+}
 function navigate() {
   if (!data) return;
   const requested = location.hash.slice(1) || "overview",
@@ -1010,7 +1021,7 @@ function navigate() {
     if (a.dataset.view === view) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
-  ({ overview, growth, records, support })[view]();
+  ({ overview, growth, records, support, outreach })[view]();
   window.scrollTo(0, 0);
   if (pendingAttention && view === "growth") {
     const {kind, id} = pendingAttention;
@@ -1532,6 +1543,7 @@ onAuthStateChanged(supportAuth, async (user) => {
     }
   }
   if (data && view === "support") support();
+  if (data && view === "outreach") outreach();
 });
 
 document.addEventListener("click", async (event) => {
