@@ -808,7 +808,8 @@ function taskTimelineContext(t) {
   const plan = data.growthSystem.growthTimeline;
   const stage = plan?.stages.find(s => s.taskIds.includes(t.id));
   if (!stage) return "";
-  return `<aside class="task-timeline-context" aria-label="How this task fits into the growth plan"><small>HOW THIS TASK FITS INTO THE PLAN</small><h3>${esc(stage.title)}</h3><p class="task-timeline-summary">This task helps us ${esc(stage.outcome)}</p><dl><div><dt>Working on this now</dt><dd>${esc(stage.label)} · ${esc(stage.window)}</dd></div><div><dt>Start this work when</dt><dd>${esc(stage.start)}</dd></div><div><dt>Ready to move on when</dt><dd>${esc(stage.gate)}</dd></div><div><dt>What happens after this</dt><dd>${esc(stage.next)}</dd></div></dl><button class="text-btn" data-open-timeline="${esc(stage.id)}">Open this part of “What happens next” →</button></aside>`;
+  const context = stage.adminContext || {why:stage.outcome,start:stage.start,done:stage.gate,next:stage.next};
+  return `<aside class="task-timeline-context" aria-label="Why this task matters"><small>WHY THIS TASK MATTERS</small><h3>${esc(stage.title)}</h3><p class="task-timeline-summary">${esc(context.why)}</p><dl><div><dt>Now</dt><dd>${esc(stage.label)} · ${esc(stage.window)}</dd></div><div><dt>Start</dt><dd>${esc(context.start)}</dd></div><div><dt>Done when</dt><dd>${esc(context.done)}</dd></div><div><dt>Next</dt><dd>${esc(context.next)}</dd></div></dl><button class="text-btn" data-open-timeline="${esc(stage.id)}">See it in the plan →</button></aside>`;
 }
 const strategyDrafts = new Map();
 const strategyNotices = new Map();
