@@ -318,7 +318,12 @@ function decisionPanel() {
 }
 function milestoneEvidence(milestone) {
   const s=milestoneState(milestone,data.metricObservations,decisionToday());
-  return `<section class="milestone-evidence"><header><h3>Evidence for this milestone</h3><span class="measure-state unverified">${s.ready?'Evidence ready for review':'More evidence needed'}</span></header><p><strong>Subscriber target:</strong> ${s.targetReached===null?'Needs a current verified observation':s.targetReached?'Reached':'Not reached'}. <strong>Expansion:</strong> ${s.ready?'Ready to consider':'Not established'}.</p><div class="evidence-checks">${s.checks.map(c=>`<article><div><strong>${esc(c.title)}</strong><span class="measure-state ${c.status==='Met'?'verified':'unverified'}">${esc(c.status)}</span></div><p>${esc(c.note)}</p>${c.metricStatus?`<small>Measurement: ${esc(c.metricStatus)}</small>`:`<small>Reviewed ${esc(c.reviewedAt)} · Review by ${esc(c.reviewBy)}</small>`}<div>${c.kind==='metric'?`<button class="text-btn" data-metric-detail="${esc(c.metricId)}">View measurement ↗</button>`:`<button class="text-btn" data-doc="${esc(c.sourcePath)}">Open evidence record ↗</button>`}${c.taskIds.map(id=>`<button class="text-btn" data-task-detail="${esc(id)}">${esc(data.growthSystem.tasks[id].adminTitle)} →</button>`).join('')}</div></article>`).join('')}</div><p class="subtle">Evidence readiness is not approval to send, publish or spend. These checks do not hold independent preparation.</p></section>`;
+  const labels = [
+    `Reach ${milestone.target} paying subscribers`,
+    "Confirm customers are getting real value",
+    "Decide whether moving to the next stage makes sense"
+  ];
+  return `<section class="milestone-evidence"><header><div><small>WHEN TO MOVE ON</small><h3>${s.ready?'Ready to review the next stage':'Stay focused here'}</h3><p>${s.ready?'The three conditions are met. Review the next stage before expanding.':'Move on only after these three conditions are met.'}</p></div><span class="roadmap-readiness ${s.ready?'ready':''}">${s.ready?'Ready for review':'Not ready yet'}</span></header><ol>${s.checks.map((c,index)=>`<li class="milestone-requirement ${c.status==='Met'?'complete':''}"><span aria-hidden="true">${c.status==='Met'?'✓':index+1}</span><strong>${esc(labels[index] || c.title)}</strong><small>${c.status==='Met'?'Done':'Still needed'}</small></li>`).join('')}</ol></section>`;
 }
 function cohortPanel() {
   const r=data.creatorCohortReport;
