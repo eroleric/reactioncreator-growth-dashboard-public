@@ -773,13 +773,6 @@ function archivedActionDetail(id) {
 function growthTimelinePanel() {
   const g = data.growthSystem;
   const docButton = (path, title) => `<button class="text-btn" data-doc="${esc(path)}">${esc(title)} ↗</button>`;
-  const currentPlan = data.growthSystem.growthTimeline;
-  if (!currentPlan?.stages?.length) return "";
-  const revisions = [{id:'current', changedAt:currentPlan.reviewedAt, summary:'Current strategy', plan:currentPlan}, ...(currentPlan.history || [])];
-  const revisionIndex = Math.max(0, Math.min(revisions.length - 1, Number(growth.timelineRevision) || 0));
-  const revision = revisions[revisionIndex];
-  const plan = revision.plan;
-  const selected = plan.stages.find(s => s.id === growth.timelineStage) || plan.stages.find(s => s.id === plan.currentStage) || plan.stages[0];
   const channels = g.channels || [];
   const overview = data.growthSystem.strategyOverview;
   const facts = (items, key, places = false) => `<div class="strategy-knowledge"><div class="strategy-knowledge-heading"><small>Approved strategy</small><div><span data-knowledge-position="${key}" aria-live="polite"></span><button type="button" data-knowledge-slide="previous" data-knowledge-key="${key}" aria-label="Previous ${key} strategies">←</button><button type="button" data-knowledge-slide="next" data-knowledge-key="${key}" aria-label="Next ${key} strategies">→</button></div></div><dl class="strategy-facts${places ? ' strategy-places' : ''}" data-knowledge-track="${key}" role="region" aria-label="Approved ${key} strategies">${items.map(item => `<div>${item.source === 'APPROVED_ADMIN' ? '<small class="knowledge-provenance">Approved Admin Knowledge</small>' : ''}<dt>${item.label ? `<em>${esc(item.label)}</em> ` : ''}${esc(item.title)}</dt><dd>${esc(item.detail)}</dd></div>`).join('')}</dl></div>`;
@@ -790,15 +783,8 @@ function growthTimelinePanel() {
       <li><h3><span>2</span> Where customers are</h3>${facts(overview.whereCustomersAre, 'whereCustomersAre', true)}</li>
       <li><h3><span>3</span> How we reach them</h3>${facts(overview.howWeReachThem, 'howWeReachThem')}</li>
       <li class="strategy-admin-slot">${knowledgeAdminPanel()}</li>
-      <li class="strategy-sequence"><div class="strategy-sequence-heading"><h3><span>4</span> What happens next</h3><div class="timeline-revision-controls"><span data-timeline-revision-position aria-live="polite">${revisionIndex === 0 ? 'Current plan' : `Previous plan ${revisionIndex} of ${revisions.length - 1}`}</span><button type="button" data-timeline-revision="previous" aria-label="View newer What happens next plan" ${revisionIndex === 0 ? 'disabled' : ''}>←</button><button type="button" data-timeline-revision="next" aria-label="View older What happens next plan" ${revisionIndex === revisions.length - 1 ? 'disabled' : ''}>→</button></div></div>
-      <p class="timeline-revision-summary">${esc(revision.summary)}</p>
-      <div class="timeline-track" aria-label="Growth plan steps">${plan.stages.map((stage,i) => `<button class="timeline-stop ${stage.id === selected.id ? "selected" : ""}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="timeline-stage-detail"><span class="timeline-node">${i+1}</span><strong>${esc(stage.label)}</strong><span class="timeline-window">${esc(stage.window)}</span>${stage.id === plan.currentStage ? '<small>Start here</small>' : i === 1 ? '<small>Can start in parallel</small>' : ''}</button>`).join("")}</div>
-      </li>
     </ol>
-    <article id="timeline-stage-detail" class="simple-step" aria-label="Selected growth step"><h3>${esc(selected.title)}</h3><p>${esc(selected.outcome)}</p><details class="timeline-more"><summary>View tasks &amp; details</summary><div class="timeline-more-body"><div class="timeline-task-list">${selected.taskIds.map(id => {const t=data.tasks.find(t=>t.id===id);return t ? `<button data-task-detail="${esc(id)}"><span><strong>${esc(growthTaskTitle(t))}</strong><small>${esc(label(taskStatus(t)))}</small></span><span aria-hidden="true">→</span></button>` : '';}).join("")}</div><dl><dt>Starts when</dt><dd>${esc(selected.start)}</dd><dt>Ready for the next step</dt><dd>${esc(selected.gate)}</dd><dt>Can happen alongside</dt><dd>${esc(selected.parallel)}</dd><dt>Up next</dt><dd>${esc(selected.next)}</dd></dl></div><p class="subtle">${esc(plan.timingNote)}</p><button class="text-btn" data-doc="01_STRATEGY/GROWTH_PLAN.md">Read the saved strategy ↗</button></details></article>
-
     <details class="strategy-reference"><summary>Measurement definitions &amp; sources</summary><div class="strategy-reference-body"><div class="strategy-channel-list">${channels.map(c=>`<article><div><strong>${esc(c.name)}</strong><small>${esc(c.priority)}</small></div><p>${esc(c.strategy)}</p><p class="channel-measure"><b>Track:</b> ${esc(c.measure)}</p></article>`).join("")}</div><aside><h3>Keep the learning honest</h3><ul><li>Judge genuine paying customers, not views alone.</li><li>Give each creator a full observation window before judging results.</li><li>AI prepares the work; the owner supplies decisions or access.</li><li>Publishing requires a supported, authorized account.</li></ul><p>Referrals follow real customer value. Paid growth follows organic evidence, sound economics and exact approval.</p><div>${docButton("02_RESEARCH/GROWTH_DASHBOARD_RESEARCH.md","Research and sources")}${docButton("08_EXPERIMENTS/LEARNINGS.md","All recorded lessons")}</div></aside></div></details>
-    <p class="timeline-footnote">Estimated timing. The 7- and 14-day checks start after each creator’s first export.</p>
   </section>`;
 
 }
@@ -1687,7 +1673,7 @@ document.addEventListener("click", async (event) => {
   const timeline = event.target.closest("[data-timeline-stage], [data-open-timeline]");
   if (timeline) {
     growth.timelineStage = timeline.dataset.timelineStage || timeline.dataset.openTimeline;
-    if (timeline.dataset.openTimeline) { $("#detail").close(); growthTab = "strategy"; }
+    if (timeline.dataset.openTimeline) { $("#detail").close(); growthTab = "roadmap"; }
     growth();
     const selected = document.querySelector(`.timeline-stop[data-timeline-stage="${growth.timelineStage}"]`);
     selected?.focus({preventScroll:true});
