@@ -648,10 +648,10 @@ function growth() {
     body += growthMore("Recent AI activity", receipts);
   } else if (growthTab === "strategy") {
     body = "";
+    body += growthStrengthRadar(tasks);
     body += `<div class="growth-intro"><h2>How we’ll grow</h2><p>${esc(simple.planSummary)} AI adjusts the plan as results come in.</p></div>`;
     body += strategyQuestionsPanel();
     body += growthTimelinePanel();
-    body += growthMore("Work progress", growthStrengthRadar(tasks));
   } else if (growthTab === "roadmap") {
     const paidState = metricState(data.metricObservations,"paying-subscribers",decisionToday());
     const subscribers = paidState.observation?.value;
