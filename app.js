@@ -545,14 +545,13 @@ function removedTaskList() {
   return `<div class="removed-task-list">${removed.map(task => `<article class="removed-task-card"><div class="removed-task-card-head"><span class="task-type-badge inactive">Inactive</span><small>${esc(task.disposition)} · ${esc(task.archivedAt)}</small></div><h3>${esc(task.adminTitle || task.title)}</h3><p>${esc(task.adminSummary)}</p><dl><div><dt>Why it changed</dt><dd>${esc(task.reason)}</dd></div><div><dt>Previous status</dt><dd>${esc(label(task.formerStatus))}</dd></div><div><dt>Original task</dt><dd>${esc(task.id)}</dd></div></dl></article>`).join("")}</div>`;
 }
 function routineTaskList(tasks, routineId) {
-  const cadence = routineId.toUpperCase();
   const routine = data.growthSystem.routines.find(r => r.id === routineId);
   const matching = tasks.filter(t => routine?.tasks.includes(t.id) && canSelectAutomatically(data.growthSystem, t.id, routineId)).sort((a, b) => a.sourceRow - b.sourceRow);
   const visibleCount = 3;
   const visible = matching.slice(0, visibleCount);
   const overflow = matching.slice(visibleCount);
-  const taskRows = rows => rows.map(t => `<li><button class="text-btn" data-task-detail="${esc(t.id)}">${esc(growthTaskTitle(t))}</button></li>`).join("");
-  return `<div class="routine-task-list"><div class="routine-task-list-head"><span class="task-type-badge recurring">Recurring</span><strong>${matching.length} ${matching.length === 1 ? "task" : "tasks"}</strong></div><ul>${taskRows(visible)}</ul>${overflow.length ? growthMore(`Show ${overflow.length} more ${cadence.toLowerCase()} tasks`, `<ul>${taskRows(overflow)}</ul>`, "routine-task-overflow") : ""}</div>`;
+  const taskRows = rows => rows.map(t => `<li><button class="text-btn" data-task-detail="${esc(t.id)}">${esc(growthTaskTitle(t))}</button> <small>${esc(growthTaskCadence(t) ? cadenceLabel(growthTaskCadence(t)) : "When triggered")}</small></li>`).join("");
+  return `<div class="routine-task-list"><div class="routine-task-list-head"><span class="task-type-badge recurring">Check what is due</span><strong>${matching.length} ${matching.length === 1 ? "candidate" : "candidates"}</strong></div><p class="subtle">Check these here; run each only when its own trigger applies.</p><ul>${taskRows(visible)}</ul>${overflow.length ? growthMore(`Show ${overflow.length} more candidates to check`, `<ul>${taskRows(overflow)}</ul>`, "routine-task-overflow") : ""}</div>`;
 }
 const growthMore = (title, body, extra = "") => `<details class="growth-more ${extra}"><summary>${title}</summary><div class="growth-more-body">${body}</div></details>`;
 function growthTaskDetail(t, currentNote = "", currentBlocker = "") {
