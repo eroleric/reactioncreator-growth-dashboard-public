@@ -509,7 +509,7 @@ function aiPriorityList(tasks) {
     if (!task) return "";
     return `<button class="ai-priority-task" data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}"><span class="ai-priority-rank">${item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><span>${esc(growthTaskSummary(task))}</span></span><small>${esc(label(taskStatus(task)))}</small></button>`;
   });
-  return growthPanel(esc(priorities.title), `<p>${esc(priorities.summary)}</p><div class="ai-priority-list">${rows.slice(0,5).join("")}</div>${growthMore("Seven more tasks for the next opportunity", `<div class="ai-priority-list">${rows.slice(5).join("")}</div>`)}<p class="subtle">Ranked by expected value and current evidence. Results are still untested.</p><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button>`);
+  return growthPanel(esc(priorities.title), `<p>${esc(priorities.summary)}</p><div class="ai-priority-list ai-priority-list-horizontal">${rows.slice(0,5).join("")}</div>${growthMore("Seven more tasks for the next opportunity", `<div class="ai-priority-list ai-priority-list-horizontal">${rows.slice(5).join("")}</div>`)}<p class="subtle">Ranked by expected value and current evidence. Results are still untested.</p><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button>`);
 }
 function aiPriorityDetail(t) {
   const item = data.growthSystem.aiPriorities?.items.find(item => item.taskId === t.id);
