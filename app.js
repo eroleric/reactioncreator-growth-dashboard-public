@@ -768,8 +768,12 @@ function archivedActionDetail(id) {
 function growthTimelinePanel() {
   const g = data.growthSystem;
   const docButton = (path, title) => `<button class="text-btn" data-doc="${esc(path)}">${esc(title)} ↗</button>`;
-  const plan = data.growthSystem.growthTimeline;
-  if (!plan?.stages?.length) return "";
+  const currentPlan = data.growthSystem.growthTimeline;
+  if (!currentPlan?.stages?.length) return "";
+  const revisions = [{id:'current', changedAt:currentPlan.reviewedAt, summary:'Current strategy', plan:currentPlan}, ...(currentPlan.history || [])];
+  const revisionIndex = Math.max(0, Math.min(revisions.length - 1, Number(growth.timelineRevision) || 0));
+  const revision = revisions[revisionIndex];
+  const plan = revision.plan;
   const selected = plan.stages.find(s => s.id === growth.timelineStage) || plan.stages.find(s => s.id === plan.currentStage) || plan.stages[0];
   const channels = g.channels || [];
   const overview = data.growthSystem.strategyOverview;
@@ -781,7 +785,8 @@ function growthTimelinePanel() {
       <li><h3><span>2</span> Where customers are</h3>${facts(overview.whereCustomersAre, 'whereCustomersAre', true)}</li>
       <li><h3><span>3</span> How we reach them</h3>${facts(overview.howWeReachThem, 'howWeReachThem')}</li>
       <li class="strategy-admin-slot">${knowledgeAdminPanel()}</li>
-      <li class="strategy-sequence"><div class="strategy-sequence-heading"><h3><span>4</span> What happens next</h3><span>Research + proof can start together</span></div>
+      <li class="strategy-sequence"><div class="strategy-sequence-heading"><h3><span>4</span> What happens next</h3><div class="timeline-revision-controls"><span data-timeline-revision-position aria-live="polite">${revisionIndex === 0 ? 'Current plan' : `Previous plan ${revisionIndex} of ${revisions.length - 1}`}</span><button type="button" data-timeline-revision="previous" aria-label="View newer What happens next plan" ${revisionIndex === 0 ? 'disabled' : ''}>←</button><button type="button" data-timeline-revision="next" aria-label="View older What happens next plan" ${revisionIndex === revisions.length - 1 ? 'disabled' : ''}>→</button></div></div>
+      <p class="timeline-revision-summary">${esc(revision.summary)}</p>
       <div class="timeline-track" aria-label="Growth plan steps">${plan.stages.map((stage,i) => `<button class="timeline-stop ${stage.id === selected.id ? "selected" : ""}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="timeline-stage-detail"><span class="timeline-node">${i+1}</span><strong>${esc(stage.label)}</strong><span class="timeline-window">${esc(stage.window)}</span>${stage.id === plan.currentStage ? '<small>Start here</small>' : i === 1 ? '<small>Can start in parallel</small>' : ''}</button>`).join("")}</div>
       </li>
     </ol>
@@ -1646,6 +1651,16 @@ document.addEventListener("click", async (event) => {
     const kind = section.dataset.questionKind;
     strategyQuestionStarts[kind] = Math.max(0, Math.min(cards.length - visible, strategyQuestionStarts[kind] + direction));
     grid.scrollTo({left: cards[strategyQuestionStarts[kind]].offsetLeft - cards[0].offsetLeft, behavior:'smooth'});
+    return;
+  }
+  const timelineRevision = event.target.closest('[data-timeline-revision]');
+  if (timelineRevision) {
+    const count = (data.growthSystem.growthTimeline.history || []).length;
+    const direction = timelineRevision.dataset.timelineRevision === 'next' ? 1 : -1;
+    growth.timelineRevision = Math.max(0, Math.min(count, (Number(growth.timelineRevision) || 0) + direction));
+    growth.timelineStage = '';
+    growth();
+    document.querySelector(`[data-timeline-revision="${timelineRevision.dataset.timelineRevision}"]`)?.focus({preventScroll:true});
     return;
   }
   const timeline = event.target.closest("[data-timeline-stage], [data-open-timeline]");
