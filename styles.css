@@ -3815,6 +3815,7 @@ nav a.active {
 .ai-priority-task:focus-visible { outline:3px solid #7b67b2; outline-offset:3px; }
 .ai-priority-rank { display:grid; place-items:center; width:32px; height:32px; border-radius:10px; background:#dfefe7; color:#366c59; font-weight:700; }
 .ai-priority-copy { display:grid; gap:5px; min-width:0; }
+.ai-priority-copy em { color:#687b72; font-size:9px; font-style:normal; font-weight:750; letter-spacing:.04em; line-height:1.35; text-transform:uppercase; }
 .ai-priority-copy strong { font-size:14px; line-height:1.5; }
 .ai-priority-copy > span { font-size:12px; line-height:1.6; color:#627184; }
 .ai-priority-task > small { font-size:10px; white-space:nowrap; color:#68778a; }
