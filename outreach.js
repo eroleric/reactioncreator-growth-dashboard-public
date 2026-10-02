@@ -3,11 +3,13 @@ const statuses=['Not Contacted','Queued','Contacted','Follow-Up Needed','Respond
 const platforms=['YouTube','TikTok','Instagram','Other'];
 const columns={creator_name:'Creator',platform:'Platform',handle:'Handle',email:'Email',profile_url:'Profile URL',subscribers:'Subscribers',followers:'Followers',niche:'Niche',country:'Country',source:'Source',creator_fit_score:'Fit score',priority:'Priority',outreach_status:'Outreach status',response_status:'Response status',contact_attempts:'Attempts',last_contacted_at:'Last contacted',next_follow_up:'Next follow-up',accepted_testing:'Tester',installed_app:'Installed',active_user:'Active user',converted_to_paid:'Paid',tags:'Tags',notes:'Notes'};
 const defaults=['creator_name','platform','email','followers','subscribers','priority','outreach_status','next_follow_up'];
+const filterLabels={email:'Has email',profile:'Has profile URL',stage:'Creator stage',tag:'Tag',fit_min:'Minimum fit score',audience_min:'Minimum audience',audience_max:'Maximum audience',attempts_min:'Minimum attempts',attempts_max:'Maximum attempts',contacted_after:'Contacted after',contacted_before:'Contacted before',due:'Follow-up due'};
+const defaultFavorites={columns:['creator_name','platform','profile_url','email','creator_fit_score','priority','outreach_status','next_follow_up'],filters:['platform','outreach_status','priority','tag','fit_min','due']};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const label=k=>columns[k]||k.replaceAll('_',' ');
 const display=v=>v==null||v===''?'NA':Array.isArray(v)?v.join(', '):typeof v==='boolean'?v?'Yes':'No':v;
 const option=(v,current)=>`<option value="${esc(v)}" ${v===current?'selected':''}>${esc(v)}</option>`;
-const select=(name,values,current,empty='Any')=>`<select name="${name}" aria-label="${esc(label(name))}"><option value="">${empty}</option>${values.map(v=>option(v,current)).join('')}</select>`;
+const select=(name,values,current,empty='Any',title=label(name))=>`<select name="${name}" aria-label="${esc(title)}"><option value="">${empty}</option>${values.map(v=>option(v,current)).join('')}</select>`;
 const safeUrl=value=>{try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)?u.href:null;}catch{return null;}};
 let api,root,state={filters:{},page:1,pageSize:25,sort:'creator_name',direction:'asc',selected:new Set(),visible:defaults,tab:'creators',result:null};
 let requestNumber=0,sessionNumber=0;
@@ -17,6 +19,54 @@ export function resetOutreach(){
   if(root?.querySelector('.outreach'))root.innerHTML='<p>Checking admin session…</p>';
 }
 try{state.visible=JSON.parse(localStorage.getItem('outreach-columns'))||defaults;}catch{}
+const favorites=Object.fromEntries(Object.entries(defaultFavorites).map(([kind,keys])=>{
+  try{const saved=JSON.parse(localStorage.getItem('outreach-favorites-'+kind));if(Array.isArray(saved)&&saved.every(k=>typeof k==='string'))return [kind,new Set(saved)];}catch{}
+  return [kind,new Set(keys)];
+}));
+function savePreference(key,value){try{localStorage.setItem(key,JSON.stringify(value));}catch{}}
+function favoriteRow(kind,key,title,control){
+  const active=favorites[kind].has(key),action=active?'Remove from Favorite':'Add to Favorite';
+  return `<div class="outreach-choice" data-choice-kind="${kind}" data-choice-key="${esc(key)}"><label>${control}</label><button type="button" class="outreach-star" data-favorite="${kind}" data-key="${esc(key)}" aria-pressed="${active}" aria-label="${action}: ${esc(title)}" title="${action}">${active?'★':'☆'}</button></div>`;
+}
+function favoriteGroups(kind,items){
+  const renderItems=active=>items.filter(([key])=>favorites[kind].has(key)===active).map(([key,title,control])=>favoriteRow(kind,key,title,control)).join('');
+  return `<section class="outreach-favorites" data-favorite-group="${kind}"><h3>Favorite</h3><div class="outreach-choice-list" data-favorite-list>${renderItems(true)}</div><p class="outreach-favorite-empty" ${items.some(([key])=>favorites[kind].has(key))?'hidden':''}>Star items in Other to add them here.</p></section><details class="outreach-other" data-other-group="${kind}"><summary>Other</summary><div class="outreach-choice-list" data-other-list>${renderItems(false)}</div></details>`;
+}
+function columnPicker(visible){
+  return favoriteGroups('columns',Object.entries(columns).map(([key,title])=>[key,title,`<input type="checkbox" value="${esc(key)}" ${visible.includes(key)?'checked':''} ${key==='creator_name'?'disabled':''}>${esc(title)}`]));
+}
+function filterPicker(options){
+  const dropdowns=[['platform',platforms],['outreach_status',statuses],['stage',['Prospect','Tester','Installed','Active User','Paid User']],['email',['yes','no']],['profile',['yes','no']],...['priority','niche','country','source','tag'].map(k=>[k,options[k]||[]])];
+  const inputs=[['fit_min','number'],['audience_min','number'],['audience_max','number'],['attempts_min','number'],['attempts_max','number'],['contacted_after','date'],['contacted_before','date']];
+  return favoriteGroups('filters',[
+    ...dropdowns.map(([key,values])=>{const title=filterLabels[key]||label(key);return [key,title,`${esc(title)}${select(key,values,state.filters[key],'Any',title)}`];}),
+    ...inputs.map(([key,type])=>[key,filterLabels[key],`${filterLabels[key]}<input name="${key}" type="${type}" ${type==='number'?'min="0"':''} value="${esc(state.filters[key]||'')}">`]),
+    ['due',filterLabels.due,`<span class="outreach-due"><input type="checkbox" name="due" ${state.filters.due?'checked':''}>Follow-up due</span>`]
+  ]);
+}
+function updateFavoriteGroups(kind){
+  const favoriteGroup=root.querySelector(`[data-favorite-group="${kind}"]`),otherGroup=root.querySelector(`[data-other-group="${kind}"]`);
+  const count=otherGroup.querySelectorAll('[data-choice-key]').length;
+  const active=kind==='filters'?[...otherGroup.querySelectorAll('select,input')].filter(el=>el.type==='checkbox'?el.checked:el.value!=='').length:0;
+  otherGroup.querySelector('summary').textContent=`Other (${count})${active?' · '+active+' active':''}`;
+  favoriteGroup.querySelector('.outreach-favorite-empty').hidden=!!favoriteGroup.querySelector('[data-choice-key]');
+}
+function bindFavorites(){
+  root.querySelectorAll('[data-favorite]').forEach(button=>button.onclick=()=>{
+    const kind=button.dataset.favorite,key=button.dataset.key,active=!favorites[kind].has(key);
+    active?favorites[kind].add(key):favorites[kind].delete(key);
+    savePreference('outreach-favorites-'+kind,[...favorites[kind]]);
+    const destination=root.querySelector(active?`[data-favorite-group="${kind}"] [data-favorite-list]`:`[data-other-group="${kind}"] [data-other-list]`);
+    destination.append(button.closest('[data-choice-key]'));
+    button.setAttribute('aria-pressed',String(active));button.textContent=active?'★':'☆';
+    const action=active?'Remove from Favorite':'Add to Favorite';
+    button.title=action;button.setAttribute('aria-label',`${action}: ${kind==='columns'?columns[key]:filterLabels[key]||label(key)}`);
+    if(!active){destination.closest('details').open=true;state[kind+'OtherOpen']=true;}
+    updateFavoriteGroups(kind);button.focus();
+  });
+  ['columns','filters'].forEach(updateFavoriteGroups);
+  root.querySelector('#outreach-filters').oninput=()=>updateFavoriteGroups('filters');
+}
 export async function mountOutreach(target,call){
   root=target;api=call;
   root.innerHTML=`<div class="outreach"><div class="outreach-head"><div><div class="eyebrow">CREATOR RELATIONSHIPS</div><h1>Creator Outreach</h1><p>Your creator database, from first contact to paid customer.</p></div><button id="outreach-import">＋ Import creators</button></div><div id="outreach-alert" role="status" aria-live="polite"></div><div id="outreach-body"><p>Loading creators…</p></div></div>`;
@@ -37,7 +87,7 @@ function render(){
   const stats=[['Total creators',m.total],['With email',m.email],['Not contacted',m.notContacted],['Contacted',m.contacted],['Responded',m.responded],['Interested',m.interested],['Testers',m.testers],['Installed app',m.installed],['Reported paid flags',m.paid]];
   const rates=[['Outreach → Response',m.responseRate],['Response → Tester',m.testerRate],['Tester → Install',m.installRate],['Install → Reported paid',m.paidRate]];
   const visible=state.visible.filter(k=>columns[k]);
-  root.querySelector('#outreach-body').innerHTML=`<div class="outreach-stats">${stats.map(([l,v])=>`<article><span>${l}</span><strong>${v.toLocaleString()}</strong></article>`).join('')}</div><div class="outreach-rates">${rates.map(([l,v])=>`<span>${l} <b>${v==null?'NA':v+'%'}</b></span>`).join('')}<small title="Rates use only creators recorded in both stages. NA means no denominator. Imported candidates do not establish contact or conversion.">Recorded funnel ⓘ</small></div><div class="outreach-tabs"><button data-tab="creators" class="${state.tab==='creators'?'active':''}">All creators</button><button data-tab="progress" class="${state.tab==='progress'?'active':''}">Creator progress</button><button data-tab="attention" class="${state.tab==='attention'?'active':''}">Needs attention</button><button data-tab="duplicates" class="${state.tab==='duplicates'?'active':''}">Possible duplicates</button><button data-tab="history" class="${state.tab==='history'?'active':''}">Import history</button></div><section class="panel outreach-master"><div class="outreach-toolbar"><input id="outreach-search" type="search" placeholder="Search creators, email, niche, notes…" aria-label="Search creators" value="${esc(state.filters.search||'')}"><button id="outreach-filter-toggle">Filters${Object.keys(state.filters).filter(k=>k!=='search'&&state.filters[k]).length?' · active':''}</button><details class="outreach-column-picker"><summary>Columns</summary><div>${Object.entries(columns).map(([k,v])=>`<label><input type="checkbox" value="${esc(k)}" ${visible.includes(k)?'checked':''} ${k==='creator_name'?'disabled':''}>${esc(v)}</label>`).join('')}</div></details><button id="outreach-export">Export filtered</button><button id="outreach-export-all">Export all</button></div><form id="outreach-filters" class="outreach-filters" ${state.filtersOpen?'':'hidden'}>${[['platform',platforms],['outreach_status',statuses],['stage',['Prospect','Tester','Installed','Active User','Paid User']],['email',['yes','no']],['profile',['yes','no']],...['priority','niche','country','source','tag'].map(k=>[k,options[k]||[]])].map(([k,values])=>`<label>${esc(({email:'Has email',profile:'Has profile URL',stage:'Creator stage',tag:'Tag'})[k]||label(k))}${select(k,values,state.filters[k])}</label>`).join('')}${[['fit_min','Minimum fit score','number'],['audience_min','Minimum audience','number'],['audience_max','Maximum audience','number'],['attempts_min','Minimum attempts','number'],['attempts_max','Maximum attempts','number'],['contacted_after','Contacted after','date'],['contacted_before','Contacted before','date']].map(([k,l,t])=>`<label>${l}<input name="${k}" type="${t}" min="0" value="${esc(state.filters[k]||'')}"></label>`).join('')}<label><input type="checkbox" name="due" ${state.filters.due?'checked':''}>Follow-up due</label><button type="submit">Apply filters</button><button type="button" id="outreach-reset">Reset filters</button></form><div class="outreach-selection"><span>${state.selected.size} selected</span><select id="outreach-bulk" aria-label="Bulk action"><option value="">Bulk actions…</option value="status">Change outreach status</option><option value="priority">Change priority</option><option value="platform">Assign platform</option><option value="tag">Add tag</option><option value="contacted">Mark contacted</option><option value="followup">Mark follow-up needed</option><option value="export">Export selected</option><option value="delete">Delete records</option></select><button id="outreach-clear-selection">Clear selection</button><span class="outreach-count">${total.toLocaleString()} matching creators</span></div><div id="outreach-tab-content"></div></section>`;
+  root.querySelector('#outreach-body').innerHTML=`<div class="outreach-stats">${stats.map(([l,v])=>`<article><span>${l}</span><strong>${v.toLocaleString()}</strong></article>`).join('')}</div><div class="outreach-rates">${rates.map(([l,v])=>`<span>${l} <b>${v==null?'NA':v+'%'}</b></span>`).join('')}<small title="Rates use only creators recorded in both stages. NA means no denominator. Imported candidates do not establish contact or conversion.">Recorded funnel ⓘ</small></div><div class="outreach-tabs"><button data-tab="creators" class="${state.tab==='creators'?'active':''}">All creators</button><button data-tab="progress" class="${state.tab==='progress'?'active':''}">Creator progress</button><button data-tab="attention" class="${state.tab==='attention'?'active':''}">Needs attention</button><button data-tab="duplicates" class="${state.tab==='duplicates'?'active':''}">Possible duplicates</button><button data-tab="history" class="${state.tab==='history'?'active':''}">Import history</button></div><section class="panel outreach-master"><div class="outreach-toolbar"><input id="outreach-search" type="search" placeholder="Search creators, email, niche, notes…" aria-label="Search creators" value="${esc(state.filters.search||'')}"><button id="outreach-filter-toggle">Filters${Object.keys(state.filters).filter(k=>k!=='search'&&state.filters[k]).length?' · active':''}</button><details class="outreach-column-picker" ${state.columnsOpen?'open':''}><summary>Columns</summary><div>${columnPicker(visible)}</div></details><button id="outreach-export">Export filtered</button><button id="outreach-export-all">Export all</button></div><form id="outreach-filters" class="outreach-filters" ${state.filtersOpen?'':'hidden'}>${filterPicker(options)}<div class="outreach-filter-actions"><button type="submit">Apply filters</button><button type="button" id="outreach-reset">Reset filters</button></div></form><div class="outreach-selection"><span>${state.selected.size} selected</span><select id="outreach-bulk" aria-label="Bulk action"><option value="">Bulk actions…</option value="status">Change outreach status</option><option value="priority">Change priority</option><option value="platform">Assign platform</option><option value="tag">Add tag</option><option value="contacted">Mark contacted</option><option value="followup">Mark follow-up needed</option><option value="export">Export selected</option><option value="delete">Delete records</option></select><button id="outreach-clear-selection">Clear selection</button><span class="outreach-count">${total.toLocaleString()} matching creators</span></div><div id="outreach-tab-content"></div></section>`;
   const content=root.querySelector('#outreach-tab-content');
   if(state.tab==='creators'){
     content.innerHTML=`<div class="outreach-table-wrap"><table class="outreach-table"><thead><tr><th class="outreach-check"><input id="outreach-select-page" type="checkbox" aria-label="Select this page" ${rows.length&&rows.every(c=>state.selected.has(c.id))?'checked':''}></th>${visible.map(k=>`<th data-column="${esc(k)}"><button data-sort="${esc(k)}">${esc(columns[k])}${state.sort===k?(state.direction==='asc'?' ↑':' ↓'):''}</button><span class="outreach-resizer" role="separator" aria-label="Resize ${esc(columns[k])}" tabindex="0"></span></th>`).join('')}</tr></thead><tbody>${rows.map(c=>`<tr><td class="outreach-check"><input type="checkbox" data-select="${c.id}" aria-label="Select ${esc(c.creator_name)}" ${state.selected.has(c.id)?'checked':''}></td>${visible.map(k=>`<td class="${k==='creator_name'?'outreach-identity':''}">${cell(c,k)}</td>`).join('')}</tr>`).join('')}</tbody></table>${!rows.length?'<div class="outreach-empty"><h3>No matching creators</h3><p>Try clearing filters or import your first creator list.</p></div>':''}</div><div class="outreach-pagination"><label>Rows per page <select id="outreach-page-size">${[25,50,100].map(n=>option(n,state.pageSize)).join('')}</select></label><span>Page ${state.page} of ${Math.max(1,Math.ceil(total/state.pageSize))}</span><button id="outreach-prev" ${state.page<=1?'disabled':''}>Previous</button><button id="outreach-next" ${state.page*state.pageSize>=total?'disabled':''}>Next</button></div>`;
@@ -55,7 +105,10 @@ function render(){
   root.querySelector('#outreach-filter-toggle').onclick=()=>{state.filtersOpen=!state.filtersOpen;root.querySelector('#outreach-filters').hidden=!state.filtersOpen;};
   root.querySelector('#outreach-filters').onsubmit=e=>{e.preventDefault();state.filters={...Object.fromEntries(new FormData(e.target)),search:state.filters.search||''};state.page=1;load();};
   root.querySelector('#outreach-reset').onclick=()=>{state.filters={};state.page=1;load();};
-  root.querySelectorAll('.outreach-column-picker input').forEach(el=>el.onchange=()=>{state.visible=[...root.querySelectorAll(".outreach-column-picker input:checked")].map(input=>input.value);localStorage.setItem('outreach-columns',JSON.stringify(state.visible));render();});
+  root.querySelector('.outreach-column-picker').ontoggle=e=>{state.columnsOpen=e.target.open;};
+  root.querySelectorAll('[data-other-group]').forEach(el=>{el.open=!!state[el.dataset.otherGroup+'OtherOpen'];el.ontoggle=()=>{state[el.dataset.otherGroup+'OtherOpen']=el.open;};});
+  bindFavorites();
+  root.querySelectorAll('.outreach-column-picker input').forEach(el=>el.onchange=()=>{state.visible=el.checked?[...state.visible,el.value]:state.visible.filter(key=>key!==el.value);state.columnsOpen=true;savePreference('outreach-columns',state.visible);render();});
   root.querySelector('#outreach-export').onclick=()=>download({filters:state.filters});root.querySelector('#outreach-export-all').onclick=()=>download({});
   root.querySelector('#outreach-clear-selection').onclick=()=>{state.selected.clear();render();};root.querySelector('#outreach-bulk').onchange=e=>bulk(e.target.value);
 }
