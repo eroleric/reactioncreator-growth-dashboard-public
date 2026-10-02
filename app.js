@@ -451,8 +451,8 @@ function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
   const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]];
   if (creatorDiscoveryTabVisible) tabs.splice(2, 0, ["discovery", "Creator discovery"]);
-  if (adminActionCandidates().length) tabs.unshift(["actions", "Admin Actions"]);
-  const discoveryLabel = creatorDiscoveryTabVisible ? "Hide Creator Discovery tab" : "Show Creator Discovery tab";
+  if (creatorDiscoveryTabVisible) tabs.unshift(["actions", "Admin Actions"]);
+  const discoveryLabel = creatorDiscoveryTabVisible ? "Hide Admin Actions and Creator Discovery tabs" : "Show Admin Actions and Creator Discovery tabs";
   return `<nav class="growth-tabs" aria-label="Growth sections">${tabs.map(([id,title]) => `<button data-growth-tab="${id}" class="${selected === id ? "selected" : ""}" aria-current="${selected === id ? "page" : "false"}">${title}</button>`).join("")}<button class="growth-tab-visibility" data-growth-discovery-toggle aria-label="${discoveryLabel}" aria-pressed="${creatorDiscoveryTabVisible}" title="${discoveryLabel}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.8"></circle></svg></button></nav>`;
 }
 function expectedResultBody(result) {
@@ -641,10 +641,7 @@ function growthStrengthRadar(tasks) {
 function growth() {
   const g = data.growthSystem;
   if (!g) { $("#main").innerHTML = head("Growth", "Refresh to load the growth plan."); return; }
-  if (growthTab === "actions") {
-    if (adminActionCandidates().length) return growthActions();
-    growthTab = "work";
-  }
+  if (growthTab === "actions") return growthActions();
   if (growthTab === "expected") return growthExpectedResults();
   if (growthTab === "discovery") return growthDiscovery();
   if (growthTab === "tasks") return plan(true);
@@ -1710,7 +1707,7 @@ document.addEventListener("click", async (event) => {
   if (discoveryToggle) {
     creatorDiscoveryTabVisible = !creatorDiscoveryTabVisible;
     try { localStorage.setItem("rc-growth-creator-discovery", creatorDiscoveryTabVisible ? "visible" : "hidden"); } catch {}
-    if (!creatorDiscoveryTabVisible && growthTab === "discovery") growthTab = "work";
+    if (!creatorDiscoveryTabVisible && ["discovery", "actions"].includes(growthTab)) growthTab = "work";
     growth();
     return;
   }
