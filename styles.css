@@ -4452,3 +4452,23 @@ nav a.active {
 @media (prefers-reduced-motion: reduce) {
   .overview-command *, .overview-command *::before, .overview-command *::after { animation: none!important; transition: none!important; scroll-behavior: auto!important; }
 }
+
+/* Small evidence labels retain readable contrast on the light module surfaces. */
+.overview-command .metric-details summary,
+.overview-command .metric-details .source,
+.overview-command .metric-details .metric-delta,
+.overview-command .budget-breakdown small,
+.overview-command .funnel-details > summary small,
+.overview-command .funnel-count,
+.overview-command .work-legend > span,
+.overview-command .work-copy > strong span,
+.overview-command .system-row small,
+.overview-command .system-detail p,
+.overview-command .cohort-date,
+.overview-command .cohort-rate small,
+.overview-command .cohort-kpis span,
+.overview-command .cohort-stage span,
+.overview-command .cohort-empty > p,
+.overview-command .cohort-empty details p {
+  color: var(--command-muted);
+}
