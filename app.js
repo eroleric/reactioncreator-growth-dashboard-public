@@ -520,9 +520,23 @@ function roadmapWorkState(ids, available = true) {
   const complete = available ? tasks.filter(task => task && taskStatus(task) === "COMPLETE").length : 0;
   const unknown = available ? tasks.filter(task => !task || !["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED", "ON HOLD"].includes(taskStatus(task))).length : unique.length;
   const active = available ? tasks.filter(task => task && taskStatus(task) === "IN PROGRESS").length : 0;
-  return {complete, total: unique.length, unknown, active, available,
-    level: available && unique.length ? complete / unique.length : 0,
+  const blocked = available ? tasks.filter(task => task && taskStatus(task) === "BLOCKED").length : 0;
+  const paused = available ? tasks.filter(task => task && taskStatus(task) === "ON HOLD").length : 0;
+  return {complete, total: unique.length, unknown, active, blocked, paused, available,
+    level: available && unique.length ? (complete + active / 2) / unique.length : 0,
     overridden: available && unique.some(id => Boolean(adminState.taskOverrides[id]))};
+}
+function roadmapCardStatus(state) {
+  if (!state.available) return "Status unavailable";
+  if (!state.total) return "No tasks linked";
+  if (state.total && state.complete === state.total) return "Complete";
+  const status = state.blocked ? "Blocked" : state.paused ? "On hold" : state.active ? "In progress" : "";
+  const parts = [status, state.complete ? `${state.complete} of ${state.total} complete` : "",
+    state.unknown ? `${state.unknown} ${state.unknown === 1 ? "task" : "tasks"} unknown` : ""].filter(Boolean);
+  return parts.join(" · ") || "Not started";
+}
+function roadmapCardClass(state) {
+  return state.complete === state.total && state.total ? "complete" : state.blocked ? "blocked" : state.active ? "progress" : "";
 }
 const roadmapWaterLevels = new Map();
 function roadmapWaterAttributes(state, key) {
@@ -541,7 +555,7 @@ function roadmapProgress(state) {
   return `<span class="roadmap-completion">${esc(roadmapProgressText(state))}${state.available && state.unknown ? ` · ${state.unknown} unknown` : ''}</span>`;
 }
 function roadmapProgressNote(state) {
-  return state.available ? `Water rises as tasks are marked complete. Customer results are tracked separately.${state.overridden ? ' Includes dashboard status changes; completion evidence still needs review.' : ''}` : 'Earlier plans have no saved task-status history, so their water level is unavailable.';
+  return state.available ? `Each card's water follows task status: empty for not started, halfway for in progress, full for complete. A step combines its linked task statuses. Blocked, on-hold and unknown tasks have no estimated progress. Customer results are tracked separately.${state.overridden ? ' Includes dashboard status changes; completion evidence still needs review.' : ''}` : 'Earlier plans have no saved task-status history, so their water level is unavailable.';
 }
 function aiPriorityList(tasks) {
   const priorities = data.growthSystem.aiPriorities;
@@ -550,10 +564,11 @@ function aiPriorityList(tasks) {
   const rows = priorities.items.map(item => {
     const task = tasks.find(t => t.id === item.taskId);
     if (!task) return "";
-    return `<button class="ai-priority-task roadmap-tank-card ${statusClass(taskStatus(task))}" data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}"><span class="ai-priority-rank" aria-hidden="true">${taskStatus(task) === 'COMPLETE' ? '✓' : item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><small class="roadmap-card-status">${esc(label(taskStatus(task)))}</small></span></button>`;
+    const state = roadmapWorkState([task.id]);
+    return `<button class="ai-priority-task roadmap-tank-card ${statusClass(taskStatus(task))}" ${roadmapWaterAttributes(state,`ai-task:${task.id}`)} data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}">${roadmapWater()}<span class="ai-priority-rank" aria-hidden="true">${taskStatus(task) === 'COMPLETE' ? '✓' : item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><small class="roadmap-card-status">${esc(label(taskStatus(task)))}</small></span></button>`;
   });
   const overflow = rows.slice(5);
-  return `<section class="panel growth-panel roadmap-tank ai-roadmap" ${roadmapWaterAttributes(progress,'ai-roadmap')} aria-labelledby="ai-roadmap-title">${roadmapWater()}<div class="roadmap-tank-content"><header class="roadmap-tank-heading"><h2 id="ai-roadmap-title">${esc(priorities.title)}</h2>${roadmapProgress(progress)}</header><p class="roadmap-lead">The next tasks for the first five subscribers. Open a task for details.</p><div class="ai-priority-list ai-priority-list-horizontal" style="--roadmap-columns:${Math.max(1,Math.min(5,rows.length))}">${rows.slice(0,5).join("")}</div>${overflow.length ? growthMore(`${overflow.length} more roadmap-aligned ${overflow.length === 1 ? "task" : "tasks"}`, `<div class="ai-priority-list ai-priority-list-horizontal">${overflow.join("")}</div>`) : ""}<div class="roadmap-tank-footer"><details class="roadmap-progress-info"><summary>About this progress</summary><p>${esc(roadmapProgressNote(progress))}</p><p>Synced with Growth plan and What happens next · reviewed ${esc(priorities.alignment.reviewedAt)}.</p></details><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button></div></div></section>`;
+  return `<section class="panel growth-panel roadmap-tank ai-roadmap" aria-labelledby="ai-roadmap-title"><div class="roadmap-tank-content"><header class="roadmap-tank-heading"><h2 id="ai-roadmap-title">${esc(priorities.title)}</h2>${roadmapProgress(progress)}</header><p class="roadmap-lead">The next tasks for the first five subscribers. Open a task for details.</p><div class="ai-priority-list ai-priority-list-horizontal" style="--roadmap-columns:${Math.max(1,Math.min(5,rows.length))}">${rows.slice(0,5).join("")}</div>${overflow.length ? growthMore(`${overflow.length} more roadmap-aligned ${overflow.length === 1 ? "task" : "tasks"}`, `<div class="ai-priority-list ai-priority-list-horizontal">${overflow.join("")}</div>`) : ""}<div class="roadmap-tank-footer"><details class="roadmap-progress-info"><summary>About this progress</summary><p>${esc(roadmapProgressNote(progress))}</p><p>Synced with Growth plan and What happens next · reviewed ${esc(priorities.alignment.reviewedAt)}.</p></details><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button></div></div></section>`;
 }
 function aiPriorityDetail(t) {
   const item = data.growthSystem.aiPriorities?.items.find(item => item.taskId === t.id);
@@ -852,12 +867,12 @@ function growthNextPanel() {
   const plan = revision.plan;
   const selected = plan.stages.find(s => s.id === growth.timelineStage) || plan.stages.find(s => s.id === plan.currentStage) || plan.stages[0];
   const progress = roadmapWorkState(plan.stages.flatMap(stage => stage.taskIds), revisionIndex === 0);
-  return `<section class="growth-timeline simple-timeline roadmap-next-panel roadmap-tank" ${roadmapWaterAttributes(progress,`timeline:${revision.id}`)} aria-labelledby="roadmap-next-title">${roadmapWater()}<div class="roadmap-tank-content">
+  return `<section class="growth-timeline simple-timeline roadmap-next-panel roadmap-tank" aria-labelledby="roadmap-next-title"><div class="roadmap-tank-content">
     <header class="roadmap-tank-heading roadmap-next-heading"><h2 id="roadmap-next-title">What happens next</h2>${roadmapProgress(progress)}</header>
     <p class="roadmap-lead">The path to the first five subscribers. Open a step for details.</p>
     <div class="timeline-track" style="--roadmap-columns:${plan.stages.length}" aria-label="Growth plan steps">${plan.stages.map((stage,i) => {
       const state = roadmapWorkState(stage.taskIds, revisionIndex === 0);
-      return `<button class="timeline-stop roadmap-tank-card ${stage.id === selected.id ? "selected" : ""}${state.complete === state.total && state.total ? ' complete' : ''}" data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="roadmap-timeline-stage-detail"><span class="timeline-node" aria-hidden="true">${state.complete === state.total && state.total ? '✓' : i+1}</span><span class="roadmap-step-copy"><strong>${esc(stage.label)}</strong><small class="roadmap-card-status">${state.available && state.total && state.complete === state.total ? 'Tasks complete' : stage.id === plan.currentStage ? 'Current step' : i === 1 ? 'Can start alongside' : 'Later'}</small></span></button>`;
+      return `<button class="timeline-stop roadmap-tank-card ${stage.id === selected.id ? "selected" : ""} ${roadmapCardClass(state)}" ${roadmapWaterAttributes(state,`timeline:${revision.id}:${stage.id}`)} data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="roadmap-timeline-stage-detail">${roadmapWater()}<span class="timeline-node" aria-hidden="true">${state.complete === state.total && state.total ? '✓' : i+1}</span><span class="roadmap-step-copy"><strong>${esc(stage.label)}</strong><small class="roadmap-card-status">${esc(roadmapCardStatus(state))}</small></span></button>`;
     }).join("")}</div>
     <details id="roadmap-timeline-stage-detail" class="simple-step timeline-more" ${growth.timelineDetailsOpen ? 'open' : ''} aria-label="Selected growth step"><summary>View step details</summary><h3>${esc(selected.title)}</h3><p>${esc(selected.outcome)}</p><p class="timeline-window">${esc(selected.window)}</p><div class="timeline-more-body"><div class="timeline-task-list">${selected.taskIds.map(id => {const t=data.tasks.find(t=>t.id===id);return t ? `<button data-task-detail="${esc(id)}"><span><strong>${esc(growthTaskTitle(t))}</strong><small>${esc(label(taskStatus(t)))}</small></span><span aria-hidden="true">→</span></button>` : '';}).join("")}</div><dl><dt>Starts when</dt><dd>${esc(selected.start)}</dd><dt>Ready for the next step</dt><dd>${esc(selected.gate)}</dd><dt>Can happen alongside</dt><dd>${esc(selected.parallel)}</dd><dt>Up next</dt><dd>${esc(selected.next)}</dd></dl></div><p class="subtle">${esc(plan.timingNote)}</p></details>
     <details class="roadmap-progress-info roadmap-history" ${growth.timelineHistoryOpen ? 'open' : ''}><summary>Plan history &amp; progress</summary><p>${esc(roadmapProgressNote(progress))}</p><div class="roadmap-plan-revision"><p class="timeline-revision-summary">${esc(revision.summary)}</p><div class="timeline-revision-controls"><span data-timeline-revision-position aria-live="polite">${revisionIndex === 0 ? 'Current plan' : `Previous plan ${revisionIndex} of ${revisions.length - 1}`}</span><button type="button" data-timeline-revision="previous" aria-label="View newer What happens next plan" ${revisionIndex === 0 ? 'disabled' : ''}>←</button><button type="button" data-timeline-revision="next" aria-label="View older What happens next plan" ${revisionIndex === revisions.length - 1 ? 'disabled' : ''}>→</button></div></div></details></div>
