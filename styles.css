@@ -3385,6 +3385,17 @@ nav a.active {
   stroke: white;
   stroke-width: 2;
 }
+.growth-radar-dots .growth-radar-unknown {
+  fill: white;
+  stroke: #8b98a8;
+  stroke-dasharray: 2 2;
+}
+.growth-radar-key {
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
 .growth-radar-labels text {
   fill: var(--ink);
   font-size: 12px;
@@ -3411,7 +3422,8 @@ nav a.active {
 }
 .growth-strength-scores strong {
   color: #405c99;
-  font-size: 15px;
+  font-size: 11px;
+  text-align: right;
 }
 .growth-strength-scores strong small {
   color: var(--muted);

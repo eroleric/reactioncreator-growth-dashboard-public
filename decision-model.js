@@ -54,6 +54,44 @@ export function metricState(ledger,id,today=new Date().toISOString().slice(0,10)
 export function periodLabel(period) {
   return !period || period.kind==='unknown' ? 'Period unknown' : period.kind==='point' ? `As of ${period.end}` : `${period.start} to ${period.end}`;
 }
+
+// These are customer priorities, independent of task phases and display overrides.
+export const growthPriorityAxes = [
+  {id:'needs', short:'Needs', title:'Understand creators’ needs and choices'},
+  {id:'reach', short:'Reach', title:'Reach suitable creators'},
+  {id:'try', short:'First try', title:'Turn interest into a first try'},
+  {id:'video', short:'Useful video', title:'Finish useful videos', metricId:'activated'},
+  {id:'return', short:'Return', title:'Return to make another video', metricId:'repeat-7d'},
+  {id:'paid', short:'Paying', title:'Turn value into paying customers', metricId:'paying-subscribers'},
+];
+const evidenceLevels = {REPORTED:1, OBSERVED:2, REVIEWED:3};
+export function validateGrowthPriorityEvidence(system) {
+  const evidence=system.growthPriorityEvidence;
+  if(evidence?.version!==1 || !Array.isArray(evidence.reviews)) throw new Error('Missing growth priority evidence');
+  const required=growthPriorityAxes.filter(a=>!a.metricId).map(a=>a.id), ids=new Set();
+  for(const r of evidence.reviews) {
+    if(!required.includes(r.axisId) || ids.has(r.axisId) || !['UNKNOWN',...Object.keys(evidenceLevels)].includes(r.state) || !textOK(r.summary) || !/^(01_STRATEGY|02_RESEARCH|03_ANALYTICS|08_EXPERIMENTS)\/[A-Za-z0-9_-]+\.md$/.test(r.sourcePath)) throw new Error('Invalid growth priority review');
+    if(r.state==='UNKNOWN' ? r.observedAt!==null || r.reviewBy!==null : !dateOK(r.observedAt) || !dateOK(r.reviewBy) || r.reviewBy<r.observedAt) throw new Error('Growth evidence needs its actual observation date and review date');
+    ids.add(r.axisId);
+  }
+  if(ids.size!==required.length) throw new Error('Incomplete growth priority reviews');
+  return evidence;
+}
+export function growthPriorityScores(system,ledger,today) {
+  const evidence=validateGrowthPriorityEvidence(system);
+  return growthPriorityAxes.map(axis=>{
+    if(axis.metricId) {
+      const m=metricState(ledger,axis.metricId,today), o=m.observation;
+      const state=m.stale?'OUTDATED':m.usable?'OBSERVED':o?.quality==='REPORTED' && o.completeness==='COMPLETE' && o.value!==null?'REPORTED':'UNKNOWN';
+      const value=o?.value==null?null:`${o.value}${m.definition.unit==='percent'?'%':''}`;
+      const summary=value===null?'No classified customer result is recorded yet.':`${m.stale?'Last recorded':'Recorded'} result: ${value}. ${periodLabel(o.period)}. ${o.note}`;
+      return {...axis,state,score:evidenceLevels[state] ?? null,summary,observedAt:o?.observedAt || null,sourcePath:o?.sourcePath || '03_ANALYTICS/METRICS.md'};
+    }
+    const review=evidence.reviews.find(r=>r.axisId===axis.id);
+    const state=review.state!=='UNKNOWN' && today>review.reviewBy?'OUTDATED':review.state;
+    return {...axis,...review,state,score:evidenceLevels[state] ?? null};
+  });
+}
 export function validateDecisionView(system,ledger) {
   const v=system.decisionView;
   if (!v || !dateOK(v.reviewedAt) || !textOK(v.blocker?.title) || !textOK(v.blocker?.detail) || !v.blocker.sourcePath || !Array.isArray(v.nextActions) || !v.nextActions.length) throw new Error('Decision view needs reviewed blocker and actions');

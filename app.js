@@ -1,6 +1,6 @@
 import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeLearningAnswer } from "./strategy-answer.js?v=20260925-learning-1";
 import { mountOutreach, resetOutreach } from './outreach.js?v=20260926-2';
-import {metricState,periodLabel,milestoneState} from './decision-model.js?v=20260926-phase1';
+import {metricState,periodLabel,milestoneState,growthPriorityScores} from './decision-model.js?v=20261003-growth-priorities';
 import {workflowMode,canSelectAutomatically} from './workflow.js?v=20261001-goal-first';
 import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
@@ -663,60 +663,26 @@ function growthMetricCard(key, title, explanation = "") {
   const m = metric(key), unknown = m.value === "UNKNOWN";
   return `<article class="stat"><div class="label">${esc(title)}</div><div class="number ${unknown ? "growth-unknown" : ""}">${unknown ? "Not measured yet" : display(m.value)}</div><div class="note">${esc(unknown ? explanation : m.asOf)}</div></article>`;
 }
-const growthStrengthAxes = [
-  { phaseId: "G-01", short: "Demand", title: "Demand generation" },
-  { phaseId: "G-02", short: "Conversion", title: "Store & website conversion" },
-  { phaseId: "G-03", short: "Content", title: "Content engine" },
-  { phaseId: "G-04", short: "Partners", title: "Creator partnerships & community" },
-  { phaseId: "G-05", short: "Activation", title: "Activation & retention" },
-  { phaseId: "G-06", short: "Revenue", title: "Revenue & referrals" },
-  { phaseId: "G-07", short: "Paid growth", title: "Scalable acquisition & budget" },
-  { phaseId: "G-08", short: "Learning", title: "Measurement & learning" },
-];
-const growthReceiptWeight = (status) => ({ COMPLETE: 1, IN_PROGRESS: .45, BLOCKED: .15, FAILED: .1 })[status] || 0;
-function hasGrowthEvidence(task, receipts) {
-  const sharedNote = adminState.taskNotes?.[task.id]?.trim(),
-    sourceEvidence = String(task.evidence || "").trim(),
-    usefulSource = sourceEvidence && !/^(NOT STARTED|UNKNOWN|NO POST-LAUNCH|NO PAID|NO GROWTH)/i.test(sourceEvidence),
-    usefulReceipt = receipts.some((receipt) => receipt.evidence?.trim() || receipt.output?.trim());
-  return Boolean(sharedNote || usefulSource || usefulReceipt);
-}
-function growthStrengthScores(tasks) {
-  const runs = data.growthSystem?.runs || [];
-  return growthStrengthAxes.map((axis) => {
-    const phaseTasks = tasks.filter((task) => task.phaseId === axis.phaseId);
-    if (!phaseTasks.length) return { ...axis, score: 0, evidence: 0, total: 0 };
-    let progress = 0,
-      evidence = 0;
-    phaseTasks.forEach((task) => {
-      const receipts = runs.filter((receipt) => receipt.taskId === task.id),
-        savedStatus = taskStatus(task),
-        statusWeight = ({ COMPLETE: 1, "IN PROGRESS": .45, BLOCKED: .15 })[savedStatus] || 0,
-        receiptWeight = receipts.reduce((best, receipt) => Math.max(best, growthReceiptWeight(receipt.status)), 0);
-      progress += Math.max(statusWeight, receiptWeight);
-      if (hasGrowthEvidence(task, receipts)) evidence += 1;
-    });
-    const score = Math.min(5, Number(((progress / phaseTasks.length) * 4 + evidence / phaseTasks.length).toFixed(1)));
-    return { ...axis, score, evidence, total: phaseTasks.length };
-  });
-}
-function growthStrengthRadar(tasks) {
-  const scores = growthStrengthScores(tasks),
-    centerX = 300,
-    centerY = 205,
-    radius = 142,
-    point = (index, value, extra = 0) => {
-      const angle = -Math.PI / 2 + (index * Math.PI * 2) / scores.length,
-        distance = radius * (value / 5) + extra;
+function growthStrengthRadar() {
+  const scores = growthPriorityScores(data.growthSystem, data.metricObservations, decisionToday()),
+    centerX = 300, centerY = 205, radius = 142,
+    labels = {UNKNOWN:'Not observed yet', OUTDATED:'Needs a fresh check', REPORTED:'Customer reported', OBSERVED:'Observed', REVIEWED:'Reviewed'},
+    point = (index, level, extra = 0) => {
+      const angle = -Math.PI / 2 + index * Math.PI * 2 / scores.length,
+        distance = radius * level / 3 + extra;
       return [centerX + Math.cos(angle) * distance, centerY + Math.sin(angle) * distance];
     },
-    polygon = (value) => scores.map((_, index) => point(index, value).map((number) => number.toFixed(1)).join(",")).join(" "),
-    dataPoints = scores.map((item, index) => point(index, item.score).map((number) => number.toFixed(1)).join(",")).join(" "),
-    grid = [1, 2, 3, 4, 5].map((level) => `<polygon points="${polygon(level)}"></polygon>`).join(""),
-    axes = scores.map((_, index) => { const [x, y] = point(index, 5); return `<line x1="${centerX}" y1="${centerY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"></line>`; }).join(""),
-    labels = scores.map((item, index) => { const [x, y] = point(index, 5, 34), anchor = x < centerX - 18 ? "end" : x > centerX + 18 ? "start" : "middle"; return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="${anchor}">${esc(item.short)}</text>`; }).join(""),
-    dots = scores.map((item, index) => { const [x, y] = point(index, item.score); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4"><title>${esc(item.title)}: ${item.score} of 5</title></circle>`; }).join("");
-  return `<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">WORK PROGRESS</div><h2>Recorded work across Growth</h2><p>Scores update from saved Growth task status, task evidence, and recorded Growth run receipts.</p></div><span class="tag neutral">Work score · 0–5</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="img" aria-label="Eight-area work progress chart. ${scores.map((item) => `${item.title}: ${item.score} of 5`).join(". ")}"><g class="growth-radar-grid">${grid}${axes}</g><polygon class="growth-radar-shape" points="${dataPoints}"></polygon><g class="growth-radar-dots">${dots}</g><g class="growth-radar-labels">${labels}</g></svg></div><div class="growth-strength-scores">${scores.map((item) => `<div data-strength-phase="${item.phaseId}"><span>${esc(item.title)}</span><strong>${item.score}<small>/5</small></strong><i><b style="--score:${item.score * 20}%"></b></i><small>${item.evidence} of ${item.total} tasks have recorded evidence</small></div>`).join("")}</div></div><div class="growth-strength-foot"><p>Task activity and evidence coverage only. Use customer outcomes and reviewed priorities to choose the next action.</p>${growthMore("How the chart learns", `<p>Each area receives up to four points from recorded task or run progress and one point from evidence coverage. Not started work adds nothing. In-progress work, completed work, saved notes, source evidence, and run receipts update the score automatically. The chart describes recorded work only; it does not identify the business bottleneck.</p>`)}</div></section>`;
+    polygon = (level) => scores.map((_, index) => point(index, level).map(n => n.toFixed(1)).join(',')).join(' '),
+    grid = [1, 2, 3].map(level => '<polygon points="'+polygon(level)+'"></polygon>').join(''),
+    axes = scores.map((_, index) => {const [x,y]=point(index,3);return '<line x1="'+centerX+'" y1="'+centerY+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'"></line>';}).join(''),
+    axisLabels = scores.map((item,index)=>{const [x,y]=point(index,3,34),anchor=x<centerX-18?'end':x>centerX+18?'start':'middle';return '<text x="'+x.toFixed(1)+'" y="'+(y+4).toFixed(1)+'" text-anchor="'+anchor+'">'+esc(item.short)+'</text>';}).join(''),
+    dots = scores.map((item,index)=>{
+      const [x,y]=point(index,item.score ?? 3), unknown=item.score===null;
+      return '<circle class="'+(unknown?'growth-radar-unknown':'')+'" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+(unknown?6:4)+'"><title>'+esc(item.title+': '+labels[item.state])+'</title></circle>';
+    }).join(''),
+    shape = scores.every(item=>item.score!==null)?'<polygon class="growth-radar-shape" points="'+scores.map((item,index)=>point(index,item.score).map(n=>n.toFixed(1)).join(',')).join(' ')+'"></polygon>':'',
+    rows = scores.map(item=>'<div data-strength-axis="'+item.id+'" data-evidence-state="'+item.state+'"><span>'+esc(item.title)+'</span><strong>'+esc(labels[item.state])+'</strong><small>'+esc(item.summary)+'</small><small>'+esc(item.observedAt?'Observed '+item.observedAt:'Observation date unknown')+' · '+esc(item.sourcePath)+'</small></div>').join('');
+  return '<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">WORK PROGRESS</div><h2>Recorded work across Growth</h2><p>Six customer priorities: understand, reach, first try, useful video, return and payment. Customer evidence updates this web; task completion does not.</p></div><span class="tag neutral">Customer evidence</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="img" aria-label="'+esc('Six-area customer evidence chart. '+scores.map(item=>item.title+': '+labels[item.state]).join('. '))+'"><g class="growth-radar-grid">'+grid+axes+'</g>'+shape+'<g class="growth-radar-dots">'+dots+'</g><g class="growth-radar-labels">'+axisLabels+'</g></svg><p class="growth-radar-key">Rings: customer reported → observed → reviewed.<br>Hollow markers mean missing or outdated evidence; they are not scores.</p></div><div class="growth-strength-scores">'+rows+'</div></div><div class="growth-strength-foot"><p>Use the evidence to choose the next obstacle to investigate. A fuller web is not proof of growth, and the areas do not need to be equally full.</p>'+growthMore('How the chart learns','<p>Reported means a dated customer account. Observed means a verified customer result. Reviewed means actual customer behavior has been assessed for a next decision. These describe evidence depth, not conversion rates or business health. Missing and outdated evidence is left unscored; observed zero remains a measured result. Saved drafts, task notes, completion checkboxes and test activity cannot raise the web.</p><p>Customer understanding, suitable reach and first tries use reviewed, dated summaries in the Growth operating system. Useful videos, return use and paying customers use the classified metric ledger, including its observation dates and completeness. Repeat-use totals alone do not establish voluntary return; record prompting, help and whether another video was needed separately. Gifted Premium is not payment.</p><p>Content, partnerships, referrals and advertising remain tactics under the priorities they support. Measurement and learning apply across all six.</p>')+'</div></section>';
 }
 function growth() {
   const g = data.growthSystem;
@@ -747,7 +713,7 @@ function growth() {
     body += growthMore("Recent AI activity", receipts);
   } else if (growthTab === "strategy") {
     body = "";
-    body += growthStrengthRadar(tasks);
+    body += growthStrengthRadar();
     body += `<div class="growth-intro"><h2>How we’ll grow</h2><p>${esc(simple.planSummary)} AI adjusts the plan as results come in.</p></div>`;
     body += strategyQuestionsPanel();
     body += growthTimelinePanel();
