@@ -1,9 +1,9 @@
 import {reconcileTaskState, completedScopeWork} from './task-state.js?v=20261003-status-scope';
 import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeLearningAnswer } from "./strategy-answer.js?v=20260925-learning-1";
 import { mountOutreach, resetOutreach } from './outreach.js?v=20260926-2';
-import {metricState,periodLabel,milestoneState,growthPriorityScores,growthWorkScores,growthRadarScores} from './decision-model.js?v=20261004-radar-popups';
-import {workflowMode,canSelectAutomatically,aiUseBrief} from './workflow.js?v=20261003-ai-use';
-import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
+import {metricState,periodLabel,milestoneState,growthPriorityScores,growthWorkScores,growthRadarScores,rankedGrowthTasks,nextActions} from './decision-model.js?v=20261004-shared-next-tasks';
+import {workflowMode,canSelectAutomatically,aiUseBrief} from './workflow.js?v=20261004-routine-home';
+import { completedTaskResults, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
 import { GoogleAuthProvider, getAuth, getIdTokenResult, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
@@ -350,9 +350,16 @@ function metricDetail(id) {
   const superseded=new Set(s.history.map(x=>x.supersedes));
   openDetail('MEASUREMENT',s.definition.title,`<p class="growth-lead">${esc(s.definition.definition)}</p><p><strong>${esc(observationValue(s.definition,o))} · ${esc(s.status)}</strong></p><p>${esc(periodLabel(o?.period))} · Observed ${esc(o?.observedAt || 'Unknown')} · Recorded ${esc(o?.recordedAt || 'Unknown')}</p><p><strong>Population:</strong> ${esc(o?.population || 'Unknown')}</p><p><strong>Evidence:</strong> ${esc(o?.quality || 'UNKNOWN')} · ${esc(o?.completeness || 'UNKNOWN')}</p><p>${esc(o?.note || 'No observation recorded.')}</p>${o?.denominator?`<p>${o.numerator} / ${o.denominator} eligible creators</p>`:''}<p class="subtle">${esc(s.definition.freshnessReason)} Snapshot refresh does not refresh the source.</p>${o?`<button class="text-btn" data-doc="${esc(o.sourcePath)}">Open supporting record ↗</button>`:''}<h3>Observation history</h3><div class="observation-history">${s.history.map(h=>`<article><strong>${esc(observationValue(s.definition,h))}${superseded.has(h.id)?' · Superseded':''}</strong><p>${esc(periodLabel(h.period))} · Observed ${esc(h.observedAt || 'Unknown')}</p><p>${esc(h.source)} · ${esc(h.quality)} · ${esc(h.completeness)}</p><p>${esc(h.note)}</p>${h.correctionReason?`<p>Correction: ${esc(h.correctionReason)}</p>`:''}<button class="text-btn" data-doc="${esc(h.sourcePath)}">Supporting record ↗</button></article>`).join('')}</div>`);
 }
+function currentNextTasks() {
+  return nextActions(data.growthSystem,data.tasks,adminState);
+}
+function nextTaskAvailability(a) {
+  return a.available ? 'Preparation available' : a.missing.length ? 'Waiting for ' + a.missing.join(', ') : a.status === 'BLOCKED' ? blockedReason(data.tasks.find(t=>t.id===a.taskId)) : label(a.status);
+}
 function decisionPanel() {
-  const v = data.growthSystem.decisionView;
-  return `<section class="panel command-focus decision-panel" aria-label="Current focus"><div class="decision-blocker"><div class="module-heading"><span class="module-icon">${commandIcon('focus')}</span><div><div class="eyebrow">CURRENT FOCUS</div><small>Reviewed ${esc(v.reviewedAt)}</small></div></div><h2>${esc(v.blocker.title)}</h2><details class="focus-details"><summary>Why this is the focus</summary><p>${esc(v.blocker.detail)}</p><button class="text-btn" data-doc="${esc(v.blocker.sourcePath)}">Open focus record ↗</button></details></div><div class="decision-next"><h2>Next useful actions</h2><p class="subtle">Reviewed preparation. Recheck evidence before execution.</p>${(data.decisionActions || []).map((a, i) => `<article><span class="decision-order">${i + 1}</span><div class="action-copy"><div class="action-head"><button class="text-btn" data-task-detail="${esc(a.taskId)}">${esc(a.title)}</button><span class="action-state ${a.available ? 'ready' : 'waiting'}"><i class="signal-dot ${a.available ? 'verified' : 'warn'}" aria-hidden="true"></i>${a.available ? 'Ready to prepare' : 'Waiting'}</span></div><details class="action-explanation"><summary>Reason & requirements</summary><p>${esc(a.reason)}</p><small>${a.available ? 'Preparation available' : `Waiting for ${esc(a.missing.join(', ') || 'the recorded blocker')}`} · ${esc(a.stageId)} stage</small></details></div></article>`).join('') || '<p>No reviewed next action. Review the current Growth priorities.</p>'}</div></section>`;
+  const v=data.growthSystem.decisionView, queue=currentNextTasks();
+  const rows=queue.slice(0,3).map(a=>'<article><span class="decision-order">'+a.rank+'</span><div class="action-copy"><div class="action-head"><button class="text-btn" data-task-detail="'+esc(a.taskId)+'">'+esc(a.title)+'</button><span class="action-state '+(a.available?'ready':'waiting')+'">'+esc(taskStatusLabel(data.tasks.find(t=>t.id===a.taskId)))+'</span></div><details class="action-explanation"><summary>Reason &amp; requirements</summary><p>'+esc(a.reason)+'</p><small>'+esc(nextTaskAvailability(a))+'</small></details></div></article>').join('');
+  return '<section class="panel command-focus decision-panel" aria-label="Current focus"><div class="decision-blocker"><div class="module-heading"><span class="module-icon">'+commandIcon('focus')+'</span><div><div class="eyebrow">CURRENT FOCUS</div><small>Reviewed '+esc(v.reviewedAt)+'</small></div></div><h2>'+esc(v.blocker.title)+'</h2><details class="focus-details"><summary>Why this is the focus</summary><p>'+esc(v.blocker.detail)+'</p><button class="text-btn" data-doc="'+esc(v.blocker.sourcePath)+'">Open focus record ↗</button></details></div><div class="decision-next"><h2>Next useful actions</h2><p class="subtle">'+(queue.length>3?'First 3 of '+queue.length+' remaining priorities.':'Remaining priorities.')+' Same order and status as AI work.</p>'+ (rows || '<p>All ranked priorities are complete. Review the next useful work.</p>') +'<a class="text-btn" href="#growth">View all priorities in AI work →</a></div></section>';
 }
 function milestoneEvidence(milestone) {
   const s=milestoneState(milestone,data.metricObservations,decisionToday());
@@ -388,7 +395,7 @@ function overview() {
   const goal = `<section class="panel command-goal" data-goal-state="${paid.usable ? 'measured' : 'unavailable'}" aria-labelledby="subscriber-goal-title"><div class="module-heading"><span class="module-icon">${commandIcon('goal')}</span><div><div class="eyebrow">THE NEXT MILESTONE</div><h2 id="subscriber-goal-title">First ${target} paying subscribers</h2></div></div>${radialMeter(goalPercent, paid.usable ? paid.observation.value : '—', paid.usable ? `of ${target} subscribers` : 'Awaiting evidence', paid.usable ? `${paid.observation.value} of ${target} paying subscribers; ${goalPercent}% of target` : 'Current subscriber goal progress unavailable', !paid.usable)}<p class="goal-footnote">${paid.usable ? `${goalPercent}% of target · verified ${esc(paid.observation.observedAt)}` : paid.observation?.value != null ? `Last observed: ${esc(paid.observation.value)} · ${esc(paid.observation.observedAt)}<br><span>${esc(paid.status)} evidence · current progress unavailable</span>` : 'Current subscriber count unavailable.'}</p><div class="goal-milestones" aria-label="Paying subscriber milestones">${data.growthSystem.milestones.map((m, i) => `<span class="${i === 0 ? 'active' : ''}">${m.target}</span>`).join('<i aria-hidden="true"></i>')}</div><details class="goal-details"><summary>Goal & evidence rules</summary><p>Small steps toward your first ${target} paying subscribers. Tests and grants are excluded. Reaching a subscriber target does not establish readiness to expand; evidence checks remain in Growth & budget.</p></details></section>`;
   const workStates = [ ['complete', 'Completed', summary.counts.complete], ['progress', 'In progress', summary.counts.inProgress], ['waiting', 'Waiting', summary.counts.waiting], ['blocked', 'Blocked', summary.counts.blocked] ];
   const workspace = `<article class="panel overview-workspace-card growth"><div class="module-heading"><span class="module-icon">${commandIcon('work')}</span><div><div class="eyebrow">WORK PROGRESS · CURRENT SCOPE</div><h2>Growth & budget</h2></div></div><div class="work-visual">${radialMeter(summary.percentages.complete, `${summary.percentages.complete}%`, 'Tasks complete', `${summary.counts.complete} of ${summary.total} Growth tasks complete`, summary.total === 0)}<div class="work-copy"><strong>${summary.counts.complete} <span>/ ${summary.total}</span></strong><p>tasks complete</p><small>Turn real usage into paying subscribers.</small></div></div><div class="work-segments" role="img" aria-label="${workStates.map(([, title, count]) => `${count} ${title.toLowerCase()}`).join(', ')}">${workStates.map(([state,,count]) => `<span class="${state}" style="width:${summary.total ? count / summary.total * 100 : 0}%"></span>`).join('')}</div><div class="work-legend">${workStates.map(([state, title, count]) => `<span><i class="signal-dot ${state}" aria-hidden="true"></i><strong>${count}</strong> ${title}</span>`).join('')}</div><details class="work-details"><summary>What this measures</summary><p>Task status only, separate from customer results. Shared dashboard changes affect this display; completion evidence remains in the project records. Waiting includes work not started, on hold or without a recognized status.</p></details><div class="overview-workspace-footer"><button class="text-btn" type="button" data-go="growth">Open Growth & budget <span aria-hidden="true">→</span></button></div></article>`;
-  const system = `<section class="panel command-system"><div class="module-heading"><span class="module-icon">${commandIcon('system')}</span><div><div class="eyebrow">RECORDED ACTIVITY</div><h2>AI & system status</h2></div></div><div class="system-row"><i class="signal-dot ${aiInProgress.length ? 'progress' : 'neutral'}" aria-hidden="true"></i><div><strong>AI tasks in progress</strong><small>Saved task status</small></div><strong class="system-count">${aiInProgress.length}</strong></div><div class="system-row"><i class="signal-dot ${data.decisionActions.some(a => a.available) ? 'verified' : 'warn'}" aria-hidden="true"></i><div><strong>Next actions ready</strong><small>Preparation available</small></div><strong class="system-count">${data.decisionActions.filter(a => a.available).length}</strong></div><div class="system-row"><i class="signal-dot ${submittedAdminActions().length ? 'warn' : 'neutral'}" aria-hidden="true"></i><div><strong>Resolutions awaiting AI</strong><small>Next requested run</small></div><strong class="system-count">${submittedAdminActions().length}</strong></div><details class="system-detail"><summary>Activity & refresh details</summary><p>Saved statuses do not report live execution. No unattended AI processor is configured. Refresh snapshot reloads exported data; it does not fetch live product analytics.</p>${aiInProgress.length ? `<ul>${aiInProgress.map(t => `<li><button class="text-btn" data-task-detail="${esc(t.id)}">${esc(t.title)}</button></li>`).join('')}</ul>` : '<p>No AI task is recorded in progress.</p>'}</details></section>`;
+  const system = `<section class="panel command-system"><div class="module-heading"><span class="module-icon">${commandIcon('system')}</span><div><div class="eyebrow">RECORDED ACTIVITY</div><h2>AI & system status</h2></div></div><div class="system-row"><i class="signal-dot ${aiInProgress.length ? 'progress' : 'neutral'}" aria-hidden="true"></i><div><strong>AI tasks in progress</strong><small>Saved task status</small></div><strong class="system-count">${aiInProgress.length}</strong></div><div class="system-row"><i class="signal-dot ${currentNextTasks().some(a => a.available) ? 'verified' : 'warn'}" aria-hidden="true"></i><div><strong>Next actions ready</strong><small>Preparation available</small></div><strong class="system-count">${currentNextTasks().filter(a => a.available).length}</strong></div><div class="system-row"><i class="signal-dot ${submittedAdminActions().length ? 'warn' : 'neutral'}" aria-hidden="true"></i><div><strong>Resolutions awaiting AI</strong><small>Next requested run</small></div><strong class="system-count">${submittedAdminActions().length}</strong></div><details class="system-detail"><summary>Activity & refresh details</summary><p>Saved statuses do not report live execution. No unattended AI processor is configured. Refresh snapshot reloads exported data; it does not fetch live product analytics.</p>${aiInProgress.length ? `<ul>${aiInProgress.map(t => `<li><button class="text-btn" data-task-detail="${esc(t.id)}">${esc(t.title)}</button></li>`).join('')}</ul>` : '<p>No AI task is recorded in progress.</p>'}</details></section>`;
   const attentionItems = [
     ...actions.map(item => `<article><span>Admin Action · ${esc(item.id)}</span><strong>${esc(item.title)}</strong><button class="text-btn" type="button" data-open-${item.kind}="${esc(item.id)}">Open Action →</button></article>`),
   ].join("");
@@ -492,7 +499,7 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]];
+  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"]];
   if (creatorDiscoveryTabVisible) tabs.splice(2, 0, ["discovery", "Creator discovery"]);
   if (creatorDiscoveryTabVisible) tabs.unshift(["actions", "Admin Actions"]);
   const discoveryLabel = creatorDiscoveryTabVisible ? "Hide Admin Actions and Creator Discovery tabs" : "Show Admin Actions and Creator Discovery tabs";
@@ -507,19 +514,15 @@ function expectedResultsForTask(task) {
   if (!results.length) return "";
   return `<section class="task-expected-results"><h3>Expected Task Result</h3>${results.map(result => results.length > 1 ? growthMore(`Completed cycle · ${esc(result.periodKey || "Task")}`, expectedResultBody(result)) : expectedResultBody(result)).join("")}</section>`;
 }
-function growthExpectedResults() {
-  const results = completedTaskResults(data, adminState);
-  $("#main").innerHTML = head("Expected Task Results", "What completed work may change, when to look for an effect, and how certain the estimate is.") + growthNavigation() + `<div class="growth-workspace expected-results-workspace"><p class="expected-results-intro">Generated automatically for completed Growth tasks and completed recurring cycles. These forecasts stay separate from measured results.</p>${results.length ? `<div class="expected-results-toolbar"><p>${results.length} completed ${results.length === 1 ? "item" : "items"}</p><label>Find a completed task<input id="expected-result-search" type="search" placeholder="Search task or impact"></label><label>Confidence<select id="expected-result-confidence"><option value="ALL">All levels</option><option>Low</option><option>Medium</option><option>High</option></select></label></div><div id="expected-results-list"></div>` : `<section class="panel expected-results-empty"><h2>No completed Growth tasks yet</h2><p>When AI records a completed task or cycle, its expected outcome, timing, impact, confidence and assumptions will appear here automatically.</p><p>Day 1, 3, 7, 14 and 30 are included, with longer windows where relevant. Unknown traffic or conversion rates stay explicit.</p><button class="quiet" data-expected-example>Preview an example</button><button class="text-btn" data-growth-tab="work">Go to AI work →</button></section>`}</div>`;
-  if (!results.length) return;
-  const render = () => {
-    const query = $("#expected-result-search").value.trim().toLowerCase();
-    const confidence = $("#expected-result-confidence").value;
-    const matches = results.filter(result => (confidence === "ALL" || result.confidence === confidence) && `${result.taskId} ${result.taskTitle} ${result.expectedImpact.metric}`.toLowerCase().includes(query));
-    $("#expected-results-list").innerHTML = matches.length ? matches.map(result => `<details class="panel expected-result-card" data-expected-task="${esc(result.taskId)}"><summary><span><strong>${esc(result.taskTitle)}</strong><small>${esc(result.completionKind)}${result.periodKey ? ` · ${esc(result.periodKey)}` : ""} · ${esc(result.method)}</small></span><span class="expected-card-meta"><span>${esc(firstResultLabel(result.firstResult))}</span><span class="expected-confidence ${esc(result.confidence.toLowerCase())}">${esc(result.confidence)} confidence</span></span></summary>${expectedResultBody(result)}<button class="text-btn expected-open-task" data-task-detail="${esc(result.taskId)}">Open completed task →</button></details>`).join("") : '<p class="panel empty">No completed tasks match these filters.</p>';
-  };
-  $("#expected-result-search").addEventListener("input", render);
-  $("#expected-result-confidence").addEventListener("change", render);
-  render();
+function completedGrowthWork(tasks, priorityCards = []) {
+  const records=completedTaskResults(data,adminState), counts=new Map();
+  for(const record of records)counts.set(record.taskId,(counts.get(record.taskId)||0)+1);
+  const priorityIds=new Set(rankedGrowthTasks(data.growthSystem,tasks,adminState).filter(item=>item.status==='COMPLETE').map(item=>item.taskId));
+  const otherTasks=tasks.filter(task=>counts.has(task.id) && !priorityIds.has(task.id));
+  const total=priorityIds.size+otherTasks.length;
+  if(!total)return '';
+  const rows=otherTasks.map(task=>'<button class="growth-simple-task" data-completed-task="'+esc(task.id)+'" data-task-detail="'+esc(task.id)+'"><span class="growth-simple-task-copy">'+esc(growthTaskTitle(task))+'</span><small>'+counts.get(task.id)+' completion record'+(counts.get(task.id)===1?'':'s')+' · Current task: '+esc(taskStatusLabel(task))+'</small></button>').join('');
+  return growthMore('Completed work ('+total+' '+(total===1?'task':'tasks')+')','<p class="subtle">Open a task for its finished work, evidence and expected result. Completed cycles can belong to an ongoing task.</p>'+(priorityCards.length?'<div class="ai-priority-list ai-priority-list-horizontal">'+priorityCards.join('')+'</div>':'')+'<div class="growth-simple-tasks">'+rows+'</div>','completed-work completed-priorities');
 }
 function growthDiscovery() {
   const discovery = data.creatorDiscovery || {batchCount:0,scanned:0,discoveryLeads:0,suitable:0,reservesRejected:0,routes:{socialDm:0,publicEmail:0,newRoute:0}};
@@ -604,14 +607,17 @@ function aiPriorityList(tasks) {
   const priorities = data.growthSystem.aiPriorities;
   if (!priorities) return "";
   const progress = roadmapWorkState(priorities.items.map(item => item.taskId));
-  const rows = priorities.items.map(item => {
+  const ranked = rankedGrowthTasks(data.growthSystem,tasks,adminState);
+  const card = item => {
     const task = tasks.find(t => t.id === item.taskId);
     if (!task) return "";
     const state = roadmapWorkState([task.id]);
-    return `<button class="ai-priority-task roadmap-tank-card ${statusClass(taskStatus(task))}" ${roadmapWaterAttributes(state,`ai-task:${task.id}`)} data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}">${roadmapWater()}<span class="ai-priority-rank" aria-hidden="true">${taskStatus(task) === 'COMPLETE' ? '✓' : item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><small class="roadmap-card-status">${esc(taskStatusLabel(task))}</small></span></button>`;
-  });
+    return `<button class="ai-priority-task roadmap-tank-card ${statusClass(taskStatus(task))}" ${roadmapWaterAttributes(state,`ai-task:${task.id}`)} data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}" ${item.status==='COMPLETE' ? 'data-completed-task="'+esc(task.id)+'"' : ''}>${roadmapWater()}<span class="ai-priority-rank" aria-hidden="true">${taskStatus(task) === 'COMPLETE' ? '✓' : item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><small class="roadmap-card-status">${esc(taskStatusLabel(task))}</small></span></button>`;
+  };
+  const rows = ranked.filter(item=>item.status!=='COMPLETE').map(card);
+  const completed = ranked.filter(item=>item.status==='COMPLETE').map(card);
   const overflow = rows.slice(5);
-  return `<section class="panel growth-panel roadmap-tank ai-roadmap" aria-labelledby="ai-roadmap-title"><div class="roadmap-tank-content"><header class="roadmap-tank-heading"><h2 id="ai-roadmap-title">${esc(priorities.title)}</h2>${roadmapProgress(progress)}</header><p class="roadmap-lead">The next tasks for the first five subscribers. Open a task for details.</p><div class="ai-priority-list ai-priority-list-horizontal" style="--roadmap-columns:${Math.max(1,Math.min(5,rows.length))}">${rows.slice(0,5).join("")}</div>${overflow.length ? growthMore(`${overflow.length} more roadmap-aligned ${overflow.length === 1 ? "task" : "tasks"}`, `<div class="ai-priority-list ai-priority-list-horizontal">${overflow.join("")}</div>`) : ""}<div class="roadmap-tank-footer"><details class="roadmap-progress-info"><summary>About this progress</summary><p>${esc(roadmapProgressNote(progress))}</p><p>Synced with Growth plan and What happens next · reviewed ${esc(priorities.alignment.reviewedAt)}.</p></details><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button></div></div></section>`;
+  return `<section class="panel growth-panel roadmap-tank ai-roadmap" aria-labelledby="ai-roadmap-title"><div class="roadmap-tank-content"><header class="roadmap-tank-heading"><h2 id="ai-roadmap-title">${esc(priorities.title)}</h2>${roadmapProgress(progress)}</header><p class="roadmap-lead">The full priority list shown in Overview, in the same order. Open a task for details.</p><div class="ai-priority-list ai-priority-list-horizontal" style="--roadmap-columns:${Math.max(1,Math.min(5,rows.length))}">${rows.slice(0,5).join("") || '<p>All ranked priorities are complete. Review the next useful work.</p>'}</div>${overflow.length ? growthMore(`${overflow.length} more roadmap-aligned ${overflow.length === 1 ? "task" : "tasks"}`, `<div class="ai-priority-list ai-priority-list-horizontal">${overflow.join("")}</div>`) : ""}${completedGrowthWork(tasks,completed)}<div class="roadmap-tank-footer"><details class="roadmap-progress-info"><summary>About this progress</summary><p>${esc(roadmapProgressNote(progress))}</p><p>Synced with Growth plan and What happens next · reviewed ${esc(priorities.alignment.reviewedAt)}.</p></details><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button></div></div></section>`;
 }
 function aiPriorityDetail(t) {
   const item = data.growthSystem.aiPriorities?.items.find(item => item.taskId === t.id);
@@ -667,8 +673,9 @@ function growthBrief(id) {
   const t = data.tasks.find(t => t.id === id);
   const r = data.growthSystem?.routines.find(r => r.id === id);
   const aiUseText = aiUseBrief(data.growthSystem, t?.id);
+  const routineText = r ? `${r.title}. Routine candidates: ${r.tasks.join(', ')}. When: ${r.when}. Steps: ${r.steps.join('; ')}. Output: ${r.output}` : 'Daily Growth run';
   const workflowText = 'Use a goal-first, low-friction approach. Follow executionPolicy.goalFirst: select the shortest necessary available stage; reuse existing proof; combine overlapping work. Keep optional tasks and extra steps in Optional / Admin Approval. Do not select or schedule optional work without explicit human approval recorded for that task and scope; ONE_RUN does not enable recurring selection. A direct human request covers only its stated scope. Honor already authorized due commitments and urgent support/stop rules within scope. Advance a ready smaller batch without filling quotas. ';
-  const taskText = t?.execution ? `${t.id}: ${t.title}. Authoritative current status: ${data.adminState?.taskOverrides?.[t.id] || t.status}. Current scope: ${t.execution.output}. Already finished (reuse): ${completedScopeWork(t,data.growthSystem).map(item=>item.label).join("; ") || "Read the source evidence"}. Any dashboard admin update remains evidence to reconcile, not proof. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Business measure: ${t.execution.successMeasure || t.success}. Reuse through: ${(t.execution.relatedTasks || []).join(", ") || "the existing Growth routines"}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
+  const taskText = t?.execution ? `${t.id}: ${t.title}. Authoritative current status: ${data.adminState?.taskOverrides?.[t.id] || t.status}. Current scope: ${t.execution.output}. Already finished (reuse): ${completedScopeWork(t,data.growthSystem).map(item=>item.label).join("; ") || "Read the source evidence"}. Any dashboard admin update remains evidence to reconcile, not proof. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Business measure: ${t.execution.successMeasure || t.success}. Reuse through: ${(t.execution.relatedTasks || []).join(", ") || "the existing Growth routines"}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : routineText;
   return `Work only in the Reaction Creator Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. Treat removedTasks as inactive history only; never select, schedule, resume or execute an archived task. ${workflowText}${aiUseText} ${taskText} ${t?.execution?.executionContract ? `Execution contract: ${JSON.stringify(t.execution.executionContract)}.` : `Select only the routine task IDs allowed by goalFirst and explicit recurring approvals. Preflight the selected candidate contract and skip absent triggers without completing a task.`} Before any task or routine, run node dashboard/scripts/admin-actions.mjs pending and process strategy answers and approved Admin Strategy Knowledge under their intake procedures in GROWTH_EXECUTION.md. Reconcile tasks and replace processed questions before choosing work. Read common context once per run and relevant selected-task inputs, output records and recent receipts only. Update applicable commonUpdate and contract updateFiles only when evidence changed. Artifact prerequisites hold only the dependent stage; verify actual dated outputs, not completion checkboxes. Select useful Growth work within existing authority. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. When completing a task or recurring cycle, follow the Expected Task Results completion rule in GROWTH_EXECUTION.md: review the automatic estimate and record an evidence-specific forecast in the private brain with expected outcome, first-result days and timing anchor, Day 1/3/7/14/30 impacts, confidence and assumptions. Numerical ranges require a documented basis; preparation alone is not acquisition. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
 }
 function growthPanel(title, body, extra = "") {
@@ -728,7 +735,6 @@ function growth() {
   const g = data.growthSystem;
   if (!g) { $("#main").innerHTML = head("Growth", "Refresh to load the growth plan."); return; }
   if (growthTab === "actions") return growthActions();
-  if (growthTab === "expected") return growthExpectedResults();
   if (growthTab === "discovery") return growthDiscovery();
   if (growthTab === "tasks") return plan(true);
   if (growthTab === "rhythm") growthTab = "work";
@@ -802,6 +808,29 @@ function growth() {
   }));
 }
 
+function updateRecords(update) {
+  return update.records?.length ? update.records : [update];
+}
+function updateSourceLabel(source) {
+  return ({'10_DAILY_OPERATIONS/DAILY_LOG.md':'Daily log','00_ADMIN/DECISION_LOG.md':'Decision log','00_ADMIN/CHANGELOG.md':'Changelog'})[source] || 'Project record';
+}
+function updateTitle(title) {
+  return title.replace(/^\d{4}-\d{2}-\d{2}\s*[—–-]?\s*/, '').replace(/^\w+ \d{1,2}(?:,? \d{4})?\s*[—–-]\s*/, '') || 'Project update';
+}
+function updateDetail(update) {
+  const [primary, ...related] = updateRecords(update);
+  const sourceLink = record => `<button class="text-btn" data-doc="${esc(record.source)}">Open ${esc(updateSourceLabel(record.source))} ↗</button>`;
+  // Identical repeated entries remain in the snapshot; read their text once.
+  const seen = new Set([JSON.stringify(primary)]);
+  const supporting = related.filter(record => {
+    const key = JSON.stringify(record);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return `<pre class="document">${esc(primary.body)}</pre>${sourceLink(primary)}${supporting.map(record => `<details class="record-source section-gap"><summary>${esc(updateSourceLabel(record.source))} · ${esc(updateTitle(record.title))}</summary><pre class="document">${esc(record.body)}</pre>${sourceLink(record)}</details>`).join('')}`;
+}
+
 function records() {
   let section = "updates";
   $("#main").innerHTML =
@@ -822,13 +851,13 @@ function records() {
       const draw = () => {
         const q = $("#record-search").value.toLowerCase(),
           items = data.updates.filter((u) =>
-            `${u.title} ${u.body}`.toLowerCase().includes(q),
+            updateRecords(u).some(record => `${record.title} ${record.body} ${updateSourceLabel(record.source)}`.toLowerCase().includes(q)),
           );
         $("#record-results").innerHTML =
           items
             .map(
               (u) =>
-                `<article class="timeline-entry"><time>${esc(u.date || "Date not recorded")}</time><h3>${esc(u.title.replace(/^\d{4}-\d{2}-\d{2}\s*[—–-]?\s*/, "")) || "Project update"}</h3><p>${esc(u.body.replace(/[*`#]/g, "").slice(0, 230))}${u.body.length > 230 ? "…" : ""}</p><button class="text-btn section-gap" data-update="${data.updates.indexOf(u)}">Read full update ↗</button></article>`,
+                `<article class="timeline-entry"><time>${esc(u.date || "Date not recorded")}</time><h3>${esc(updateTitle(u.title))}</h3><p>${esc(u.body.replace(/[*`#]/g, "").slice(0, 230))}${u.body.length > 230 ? "…" : ""}</p><small>${esc([...new Set(updateRecords(u).map(record => updateSourceLabel(record.source)))].join(' · '))}</small><br><button class="text-btn section-gap" data-update="${data.updates.indexOf(u)}">Read full update ↗</button></article>`,
             )
             .join("") || '<p class="empty">No matching updates.</p>';
       };
@@ -1548,13 +1577,6 @@ async function autoSaveTask(row) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.hasAttribute("data-expected-example")) {
-    const task = data.tasks.find(task => task.id === "GR:AI01") || data.tasks[0];
-    const result = expectedResultForTask(task, data.growthSystem, {key:"example",evidence:"Illustrative preview only. This does not complete a task or record a result.",kind:"Example only"});
-    if (result) { result.method = "Example only"; openDetail("EXAMPLE ONLY", "Expected Task Result — preview", `<p>This is a preview for “${esc(growthTaskTitle(task))}”. No task has been marked complete.</p>${expectedResultBody(result)}`); }
-    return;
-  }
-
   if (b.hasAttribute("data-support-sign-in")) {
     supportSession.error = "";
     try { await signInWithPopup(supportAuth, supportProvider); }
@@ -1629,7 +1651,7 @@ document.addEventListener("click", async (e) => {
   }
   if (b.dataset.update !== undefined) {
     const u = data.updates[Number(b.dataset.update)];
-    openDetail(u.date, u.title, `<pre class="document">${esc(u.body)}</pre>`);
+    openDetail(u.date, updateTitle(u.title), updateDetail(u));
   }
 });
 document.addEventListener("change", (e) => {
