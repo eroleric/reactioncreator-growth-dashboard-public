@@ -807,6 +807,29 @@ function growth() {
   }));
 }
 
+function updateRecords(update) {
+  return update.records?.length ? update.records : [update];
+}
+function updateSourceLabel(source) {
+  return ({'10_DAILY_OPERATIONS/DAILY_LOG.md':'Daily log','00_ADMIN/DECISION_LOG.md':'Decision log','00_ADMIN/CHANGELOG.md':'Changelog'})[source] || 'Project record';
+}
+function updateTitle(title) {
+  return title.replace(/^\d{4}-\d{2}-\d{2}\s*[—–-]?\s*/, '').replace(/^\w+ \d{1,2}(?:,? \d{4})?\s*[—–-]\s*/, '') || 'Project update';
+}
+function updateDetail(update) {
+  const [primary, ...related] = updateRecords(update);
+  const sourceLink = record => `<button class="text-btn" data-doc="${esc(record.source)}">Open ${esc(updateSourceLabel(record.source))} ↗</button>`;
+  // Identical repeated entries remain in the snapshot; read their text once.
+  const seen = new Set([JSON.stringify(primary)]);
+  const supporting = related.filter(record => {
+    const key = JSON.stringify(record);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return `<pre class="document">${esc(primary.body)}</pre>${sourceLink(primary)}${supporting.map(record => `<details class="record-source section-gap"><summary>${esc(updateSourceLabel(record.source))} · ${esc(updateTitle(record.title))}</summary><pre class="document">${esc(record.body)}</pre>${sourceLink(record)}</details>`).join('')}`;
+}
+
 function records() {
   let section = "updates";
   $("#main").innerHTML =
@@ -827,13 +850,13 @@ function records() {
       const draw = () => {
         const q = $("#record-search").value.toLowerCase(),
           items = data.updates.filter((u) =>
-            `${u.title} ${u.body}`.toLowerCase().includes(q),
+            updateRecords(u).some(record => `${record.title} ${record.body} ${updateSourceLabel(record.source)}`.toLowerCase().includes(q)),
           );
         $("#record-results").innerHTML =
           items
             .map(
               (u) =>
-                `<article class="timeline-entry"><time>${esc(u.date || "Date not recorded")}</time><h3>${esc(u.title.replace(/^\d{4}-\d{2}-\d{2}\s*[—–-]?\s*/, "")) || "Project update"}</h3><p>${esc(u.body.replace(/[*`#]/g, "").slice(0, 230))}${u.body.length > 230 ? "…" : ""}</p><button class="text-btn section-gap" data-update="${data.updates.indexOf(u)}">Read full update ↗</button></article>`,
+                `<article class="timeline-entry"><time>${esc(u.date || "Date not recorded")}</time><h3>${esc(updateTitle(u.title))}</h3><p>${esc(u.body.replace(/[*`#]/g, "").slice(0, 230))}${u.body.length > 230 ? "…" : ""}</p><small>${esc([...new Set(updateRecords(u).map(record => updateSourceLabel(record.source)))].join(' · '))}</small><br><button class="text-btn section-gap" data-update="${data.updates.indexOf(u)}">Read full update ↗</button></article>`,
             )
             .join("") || '<p class="empty">No matching updates.</p>';
       };
@@ -1627,7 +1650,7 @@ document.addEventListener("click", async (e) => {
   }
   if (b.dataset.update !== undefined) {
     const u = data.updates[Number(b.dataset.update)];
-    openDetail(u.date, u.title, `<pre class="document">${esc(u.body)}</pre>`);
+    openDetail(u.date, updateTitle(u.title), updateDetail(u));
   }
 });
 document.addEventListener("change", (e) => {
