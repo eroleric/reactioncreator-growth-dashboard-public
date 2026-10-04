@@ -143,10 +143,10 @@ export function growthRadarScores(system,tasks,displayState,ledger,today) {
 }
 export function validateDecisionView(system,ledger) {
   const v=system.decisionView;
-  if (!v || !dateOK(v.reviewedAt) || !textOK(v.blocker?.title) || !textOK(v.blocker?.detail) || !v.blocker.sourcePath || !Array.isArray(v.nextActions) || !v.nextActions.length) throw new Error('Decision view needs reviewed blocker and actions');
+  if (!v || !dateOK(v.reviewedAt) || !textOK(v.blocker?.title) || !textOK(v.blocker?.detail) || !v.blocker.sourcePath || !system.aiPriorities?.items?.length) throw new Error('Decision view needs reviewed blocker and ranked priorities');
   const ids=new Set();
-  for(const a of v.nextActions) {
-    if(ids.has(a.taskId) || !system.tasks[a.taskId]?.executionContract.stages.some(s=>s.id===a.stageId) || !textOK(a.title) || !textOK(a.reason)) throw new Error('Invalid next action');
+  for(const a of system.aiPriorities.items) {
+    if(ids.has(a.taskId) || !system.tasks[a.taskId]?.executionContract.stages.some(s=>s.id===(a.executionStageId || 'prepare')) || !textOK(a.reason)) throw new Error('Invalid ranked next task');
     ids.add(a.taskId);
   }
   for(const m of system.milestones) {
@@ -170,12 +170,18 @@ export function milestoneState(milestone,ledger,today) {
   const paid=metricState(ledger,'paying-subscribers',today);
   return {checks,targetReached:paid.usable ? paid.observation.value>=milestone.target : null,ready:checks.every(c=>c.status==='Met')};
 }
-export function nextActions(system,sourceTasks,sourceState={}) {
-  return system.decisionView.nextActions.map(a=>{
+export function rankedGrowthTasks(system,sourceTasks,sourceState={}) {
+  return [...system.aiPriorities.items].sort((a,b)=>a.rank-b.rank).map(a=>{
     const task=sourceTasks.find(t=>t.id===a.taskId);
-    const status=sourceState.tasks?.[a.taskId]?.status || task?.status;
-    const stage=system.tasks[a.taskId].executionContract.stages.find(s=>s.id===a.stageId);
+    if(!task)return null;
+    const status=sourceState.taskOverrides?.[a.taskId] || sourceState.tasks?.[a.taskId]?.status || task.status;
+    const stageId=a.executionStageId || 'prepare';
+    const stage=system.tasks[a.taskId].executionContract.stages.find(s=>s.id===stageId);
     const missing=stage.requires.filter(p=>p.state!=='SATISFIED');
-    return {...a,status,available:missing.length===0 && status!=='BLOCKED',missing:missing.map(p=>p.artifact)};
-  }).filter(a=>a.status!=='COMPLETE').sort((a,b)=>Number(b.available)-Number(a.available)).slice(0,3);
+    const available=missing.length===0 && ['NOT STARTED','IN PROGRESS'].includes(status);
+    return {...a,stageId,title:task.execution?.adminTitle || task.adminTitle || task.title,status,available,missing:missing.map(p=>p.artifact)};
+  }).filter(Boolean);
+}
+export function nextActions(system,sourceTasks,sourceState={}) {
+  return rankedGrowthTasks(system,sourceTasks,sourceState).filter(a=>a.status!=='COMPLETE');
 }
