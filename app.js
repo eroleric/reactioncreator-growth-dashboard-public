@@ -1,6 +1,6 @@
 import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeLearningAnswer } from "./strategy-answer.js?v=20260925-learning-1";
 import { mountOutreach, resetOutreach } from './outreach.js?v=20260926-2';
-import {metricState,periodLabel,milestoneState,growthPriorityScores,growthWorkScores} from './decision-model.js?v=20261004-retained-knowledge';
+import {metricState,periodLabel,milestoneState,growthPriorityScores,growthWorkScores,growthRadarScores} from './decision-model.js?v=20261004-radar-popups';
 import {workflowMode,canSelectAutomatically,aiUseBrief} from './workflow.js?v=20261003-ai-use';
 import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
@@ -665,30 +665,54 @@ function growthMetricCard(key, title, explanation = "") {
   return `<article class="stat"><div class="label">${esc(title)}</div><div class="number ${unknown ? "growth-unknown" : ""}">${unknown ? "Not measured yet" : display(m.value)}</div><div class="note">${esc(unknown ? explanation : m.asOf)}</div></article>`;
 }
 function growthStrengthRadar(tasks) {
-  const outcomes = growthPriorityScores(data.growthSystem, data.metricObservations, decisionToday()),
-    scores = growthWorkScores(data.growthSystem, tasks, adminState),
-    centerX = 300, centerY = 205, radius = 142,
-    labels = {UNKNOWN:'Not observed yet', OUTDATED:'Needs a fresh check', REPORTED:'Customer reported', OBSERVED:'Observed', REVIEWED:'Reviewed'},
-    point = (index, level, extra = 0) => {
-      const angle = -Math.PI / 2 + index * Math.PI * 2 / scores.length,
-        distance = radius * level / 5 + extra;
-      return [centerX + Math.cos(angle) * distance, centerY + Math.sin(angle) * distance];
-    },
-    polygon = (level) => scores.map((_, index) => point(index, level).map(n => n.toFixed(1)).join(',')).join(' '),
-    grid = [1, 2, 3, 4, 5].map(level => '<polygon points="'+polygon(level)+'"></polygon>').join(''),
-    axes = scores.map((_, index) => {const [x,y]=point(index,5);return '<line x1="'+centerX+'" y1="'+centerY+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'"></line>';}).join(''),
-    axisLabels = scores.map((item,index)=>{const [x,y]=point(index,5,34),anchor=x<centerX-18?'end':x>centerX+18?'start':'middle';return '<text x="'+x.toFixed(1)+'" y="'+(y+4).toFixed(1)+'" text-anchor="'+anchor+'">'+esc(item.short)+'</text>';}).join(''),
-    dots = scores.map((item,index)=>{
-      const [x,y]=point(index,item.score);
-      return '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="4"><title>'+esc(item.title+': work and knowledge '+item.score+' of 5')+'</title></circle>';
+  const scores = growthRadarScores(data.growthSystem, tasks, adminState, data.metricObservations, decisionToday()),
+    point=(index,level,extra=0)=>{const angle=-Math.PI/2+index*Math.PI*2/6,distance=142*level/5+extra;return [300+Math.cos(angle)*distance,205+Math.sin(angle)*distance];},
+    polygon=level=>scores.map((_,index)=>point(index,level).map(n=>n.toFixed(1)).join(',')).join(' '),
+    grid=[1,2,3,4,5].map(level=>'<polygon points="'+polygon(level)+'"></polygon>').join(''),
+    axes=scores.map((item,index)=>{
+      const [x,y]=point(index,5),[dx,dy]=point(index,item.score),[lx,ly]=point(index,5,32),[sx,sy]=point(index,.6),anchor=lx<282?'end':lx>318?'start':'middle';
+      return '<g class="growth-radar-axis" role="button" tabindex="0" data-strength-axis="'+item.id+'" data-work-score="'+item.score+'" data-evidence-state="'+item.outcome.state+'" aria-label="'+esc(item.title)+'" aria-describedby="growth-radar-popup" aria-expanded="false"><line class="growth-axis-line" x1="300" y1="205" x2="'+x+'" y2="'+y+'"></line><line class="growth-axis-hit" x1="'+sx+'" y1="'+sy+'" x2="'+lx+'" y2="'+ly+'"></line><circle class="growth-axis-dot" cx="'+dx+'" cy="'+dy+'" r="5"></circle><rect class="growth-axis-label-hit" x="'+(anchor==='end'?lx-108:anchor==='start'?lx-4:lx-54)+'" y="'+(ly-14)+'" width="108" height="48"></rect><text class="growth-axis-label" x="'+lx+'" y="'+(ly+4)+'" text-anchor="'+anchor+'">'+esc(item.short)+'<tspan class="growth-axis-score" x="'+lx+'" dy="15">'+item.score+'/5</tspan></text></g>';
     }).join(''),
-    shape = '<polygon class="growth-radar-shape" points="'+scores.map((item,index)=>point(index,item.score).map(n=>n.toFixed(1)).join(',')).join(' ')+'"></polygon>',
-    rows = scores.map(item=>{
-      const outcome=outcomes.find(o=>o.id===item.id);
-      return '<div data-strength-axis="'+item.id+'" data-evidence-state="'+outcome.state+'"><span>'+esc(item.title)+'</span><strong>'+item.score+'<small>/5 work &amp; knowledge</small></strong><small class="growth-known"><b>Already known:</b> '+esc(item.knowledge.summary)+'</small><small>'+item.evidence+' of '+item.total+' included tasks have notes or evidence · '+item.receipts+' retained run receipts</small><small class="growth-customer-result"><b>Customer result: '+esc(labels[outcome.state])+'</b><br>'+esc(outcome.summary)+'</small>'+growthMore('Knowledge sources', '<p>Knowledge reviewed '+esc(item.knowledge.reviewedAt)+'.</p><ul>'+item.knowledge.sourcePaths.map(p=>'<li>'+esc(p)+'</li>').join('')+'</ul><p>Customer observation: '+esc(outcome.observedAt || 'unknown')+' · '+esc(outcome.sourcePath)+'. '+esc(outcome.summary)+'</p>')+'</div>';
-    }).join('');
-  return '<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">WORK PROGRESS</div><h2>Recorded work across Growth</h2><p>Our existing knowledge, research, proof and recorded work, grouped under six customer priorities. Customer results are shown separately.</p></div><span class="tag neutral">Work &amp; knowledge · 0–5</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="img" aria-label="'+esc('Six-area work and knowledge chart. '+scores.map(item=>item.title+': '+item.score+' of 5').join('. '))+'"><g class="growth-radar-grid">'+grid+axes+'</g>'+shape+'<g class="growth-radar-dots">'+dots+'</g><g class="growth-radar-labels">'+axisLabels+'</g></svg><p class="growth-radar-key">The shape shows recorded work and retained knowledge.<br>It does not measure customer growth.</p></div><div class="growth-strength-scores">'+rows+'</div></div><div class="growth-strength-foot"><p>Use the evidence to choose the next obstacle to investigate. A fuller web is not proof of growth, and the areas do not need to be equally full.</p>'+growthMore('How the chart learns','<p>Each area keeps one point for its reviewed, sourced knowledge and up to four points for recorded task or run progress. Completed work counts fully; in-progress work counts partially. Earlier receipts from merged tasks count through their surviving owner, once per task. A finished cycle does not close a standing task.</p><p>Existing research, the selected creator pool, verified app proof and billing checks are retained. Optional tasks without recorded work are excluded so unused content, partnerships or advertising do not become a quota. Scores can change when the included work changes; they are not comparable customer conversion rates.</p><p>Customer results keep their separate classification and observation dates. Unknown customer outcomes do not erase preparation. A saved demo or granted Premium is not a customer activation or payment. Content, partnerships, referrals and advertising remain supporting tactics; learning applies across all six.</p>')+'</div></section>';
+    shape='<polygon class="growth-radar-shape" points="'+scores.map((item,index)=>point(index,item.score).map(n=>n.toFixed(1)).join(',')).join(' ')+'"></polygon>',
+    descriptions=scores.map(item=>'<template data-radar-content="'+item.id+'"><strong>'+esc(item.title)+'</strong><span class="growth-popup-score">'+item.score+'/5 · '+esc(item.outcome.state==='UNKNOWN' || item.outcome.state==='OUTDATED'?'Preparation; customer evidence pending':'Customer evidence: '+item.outcome.state.toLowerCase())+'</span><p><b>Already known</b><br>'+esc(item.knowledge.brief)+'</p><p><b>Still to learn</b><br>'+esc(item.knowledge.gap)+'</p></template>').join('');
+  return '<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">WORK PROGRESS</div><h2>Recorded work across Growth</h2><p>Hover a label, dot or spoke for what we know and what we still need to learn. Tap or use the keyboard on any area.</p></div><span class="tag neutral">Preparation &amp; evidence · 0–5</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="group" aria-label="Six-area preparation and evidence chart"><g class="growth-radar-grid">'+grid+'</g>'+shape+axes+'</svg><p class="growth-radar-key">Preparation can reach 3/5. Higher levels require current customer evidence.<br>A full score never means we know everything.</p></div><div id="growth-radar-popup" class="growth-radar-popup" role="tooltip" hidden></div>'+descriptions+'</div><div class="growth-strength-foot">'+growthMore('How the chart learns','<p>Existing knowledge, research, saved proof and earlier work receipts are retained under the six priorities. Untouched optional tasks are excluded, and receipts from merged tasks count through their surviving owner once per task.</p><p>The underlying work score uses one point for sourced knowledge and up to four for recorded progress. The visible score is capped at 3/5 while customer evidence is missing or outdated, 3.5 for customer reports, 4 for verified observations and 5 for a reviewed customer-behavior decision. These are evidence limits, not statistical confidence or conversion rates. An observed zero remains a dated finding, not business success.</p><p>Completed research cycles cannot prove the recurring customer problem is solved. A fuller web is not proof of growth; no area is permanently finished. Customer results keep their actual dates and classification. The book-informed aim is the next useful learning decision, not filling every spoke.</p>')+'</div></section>';
 }
+let radarHideTimer, radarDismissed=false;
+function hideRadarPopup() {
+  clearTimeout(radarHideTimer);
+  document.querySelectorAll('.growth-radar-axis[aria-expanded="true"]').forEach(axis=>axis.setAttribute('aria-expanded','false'));
+  const popup=document.getElementById('growth-radar-popup');if(popup)popup.hidden=true;
+}
+function showRadarPopup(axis) {
+  clearTimeout(radarHideTimer);
+  const panel=axis.closest('.growth-strength'),popup=panel?.querySelector('.growth-radar-popup'),content=panel?.querySelector('template[data-radar-content="'+axis.dataset.strengthAxis+'"]');
+  if(!popup || !content || radarDismissed)return;
+  panel.querySelectorAll('.growth-radar-axis').forEach(a=>a.setAttribute('aria-expanded',String(a===axis)));
+  popup.innerHTML=content.innerHTML;popup.hidden=false;
+  const anchor=axis.querySelector('.growth-axis-label').getBoundingClientRect(),box=popup.getBoundingClientRect(),margin=12;
+  popup.style.left=Math.max(margin,Math.min(innerWidth-box.width-margin,anchor.left+anchor.width/2-box.width/2))+'px';
+  const below=anchor.bottom+10;
+  popup.style.top=Math.max(margin,Math.min(innerHeight-box.height-margin,below))+'px';
+}
+document.addEventListener('pointerover',event=>{
+  const axis=event.target.closest?.('.growth-radar-axis');
+  if(axis && !axis.contains(event.relatedTarget)){radarDismissed=false;showRadarPopup(axis);}
+  if(event.target.closest?.('.growth-radar-popup'))clearTimeout(radarHideTimer);
+});
+document.addEventListener('pointerout',event=>{
+  if(event.target.closest?.('.growth-radar-axis,.growth-radar-popup') && !event.relatedTarget?.closest?.('.growth-radar-axis,.growth-radar-popup'))radarHideTimer=setTimeout(hideRadarPopup,160);
+});
+document.addEventListener('focusin',event=>{const axis=event.target.closest?.('.growth-radar-axis');if(axis){radarDismissed=false;showRadarPopup(axis);}else hideRadarPopup();});
+document.addEventListener('click',event=>{const axis=event.target.closest?.('.growth-radar-axis');if(axis){radarDismissed=false;showRadarPopup(axis);}else if(!event.target.closest?.('.growth-radar-popup'))hideRadarPopup();});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape'){radarDismissed=true;hideRadarPopup();}
+  const axis=event.target.closest?.('.growth-radar-axis');if(axis && ['Enter',' '].includes(event.key)){event.preventDefault();radarDismissed=false;showRadarPopup(axis);}
+});
+window.addEventListener('wheel',hideRadarPopup,{passive:true});
+window.addEventListener('touchmove',hideRadarPopup,{passive:true});
+window.addEventListener('scroll',()=>{const axis=document.querySelector('.growth-radar-axis[aria-expanded="true"]');if(axis)showRadarPopup(axis);},true);
+window.addEventListener('resize',hideRadarPopup);
+
 function growth() {
   const g = data.growthSystem;
   if (!g) { $("#main").innerHTML = head("Growth", "Refresh to load the growth plan."); return; }

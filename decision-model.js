@@ -107,7 +107,7 @@ export function validateGrowthKnowledge(system) {
   if(!Array.isArray(rows) || rows.length!==growthPriorityAxes.length) throw new Error('Six retained knowledge summaries are required');
   const seen=new Set();
   for(const r of rows) {
-    if(!growthPriorityAxes.some(a=>a.id===r.axisId) || seen.has(r.axisId) || !textOK(r.summary) || !dateOK(r.reviewedAt) || !Array.isArray(r.sourcePaths) || !r.sourcePaths.length || r.sourcePaths.some(p=>!/^\d{2}_[A-Z_]+\/[A-Za-z0-9_-]+\.md$/.test(p))) throw new Error('Invalid retained growth knowledge');
+    if(!growthPriorityAxes.some(a=>a.id===r.axisId) || seen.has(r.axisId) || !textOK(r.summary) || !textOK(r.brief) || !textOK(r.gap) || r.brief.length>300 || r.gap.length>300 || !dateOK(r.reviewedAt) || !Array.isArray(r.sourcePaths) || !r.sourcePaths.length || r.sourcePaths.some(p=>!/^\d{2}_[A-Z_]+\/[A-Za-z0-9_-]+\.md$/.test(p))) throw new Error('Invalid retained growth knowledge');
     seen.add(r.axisId);
   }
   const mapped=new Set(Object.values(priorityTaskIds).flat().map(id=>'GR:'+id));
@@ -131,6 +131,14 @@ export function growthWorkScores(system,tasks,displayState={}) {
     // Optional work that has not been selected is not an unfinished-work quota.
     const score=Number((1+(total?4*records.reduce((sum,r)=>sum+r.progress,0)/total:0)).toFixed(1));
     return {...axis,score,knowledge:retained,total,evidence:records.filter(r=>r.evidence).length,receipts:records.reduce((sum,r)=>sum+r.receipts,0),taskIds:records.map(r=>r.id)};
+  });
+}
+export function growthRadarScores(system,tasks,displayState,ledger,today) {
+  const outcomes=growthPriorityScores(system,ledger,today);
+  return growthWorkScores(system,tasks,displayState).map(work=>{
+    const outcome=outcomes.find(o=>o.id===work.id);
+    const ceiling=({UNKNOWN:3,OUTDATED:3,REPORTED:3.5,OBSERVED:4,REVIEWED:5})[outcome.state];
+    return {...work,workScore:work.score,score:Math.min(work.score,ceiling),ceiling,outcome};
   });
 }
 export function validateDecisionView(system,ledger) {

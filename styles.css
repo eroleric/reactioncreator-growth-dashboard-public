@@ -3346,7 +3346,7 @@ nav a.active {
 }
 .growth-strength-layout {
   display: grid;
-  grid-template-columns: minmax(420px, 1.1fr) minmax(330px, .9fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 20px;
   padding: 16px 26px 24px;
@@ -3401,65 +3401,37 @@ nav a.active {
   font-size: 12px;
   font-weight: 700;
 }
-.growth-strength-scores {
-  display: grid;
-  gap: 7px;
-}
-.growth-strength-scores > div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 3px 14px;
-  padding: 9px 11px;
-  border: 1px solid #e5eaf0;
-  border-radius: 8px;
-  background: #fafbfc;
-}
-.growth-strength-scores span {
-  min-width: 0;
+.growth-radar-wrap { max-width: 640px; width: 100%; margin: 0 auto; }
+.growth-radar-axis { cursor: pointer; outline: none; }
+.growth-axis-line { stroke: #d5dde5; stroke-width: 1; }
+.growth-axis-hit { stroke: transparent; stroke-width: 28; }
+.growth-axis-label-hit { fill: transparent; pointer-events: all; }
+.growth-axis-dot { fill: #405c99; stroke: white; stroke-width: 2; }
+.growth-axis-label { fill: var(--ink); font-size: 14px; font-weight: 700; }
+.growth-axis-score { fill: #62768e; font-size: 11px; font-weight: 500; }
+.growth-radar-axis:hover .growth-axis-dot,
+.growth-radar-axis:focus .growth-axis-dot { stroke: #132638; stroke-width: 4; }
+.growth-radar-axis:focus .growth-axis-label { text-decoration: underline; }
+.growth-radar-popup {
+  position: fixed;
+  z-index: 90;
+  width: min(310px, calc(100vw - 24px));
+  padding: 16px 18px;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid #d4deeb;
+  border-radius: 12px;
+  box-shadow: 0 12px 36px #17324d26;
   font-size: 12px;
-  font-weight: 650;
+  line-height: 1.5;
 }
-.growth-strength-scores strong {
-  color: #405c99;
-  font-size: 11px;
-  text-align: right;
-}
-.growth-strength-scores strong small {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
-}
-.growth-strength-scores i {
-  grid-column: 1/-1;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 99px;
-  background: #e5eaf0;
-}
-.growth-strength-scores i b {
-  display: block;
-  width: var(--score);
-  height: 100%;
-  border-radius: inherit;
-  background: #526da6;
-}
-.growth-strength-scores > div > small {
-  grid-column: 1/-1;
-  color: var(--muted);
-  font-size: 10px;
-}
-.growth-strength-scores .growth-more {
-  grid-column: 1/-1;
-  margin: 3px 0 0;
-}
-.growth-strength-scores .growth-more > summary {
-  padding: 8px 10px;
-  font-size: 11px;
-}
-.growth-strength-scores .growth-customer-result {
-  padding-top: 5px;
-  border-top: 1px solid #e5eaf0;
+.growth-radar-popup[hidden] { display: none; }
+.growth-radar-popup > strong { display: block; font-size: 14px; line-height: 1.35; }
+.growth-popup-score { display: block; margin-top: 5px; color: #526da6; font-size: 11px; }
+.growth-radar-popup p { margin: 10px 0 0; }
+@media (max-width: 600px) {
+  .growth-axis-label { font-size: 18px; }
+  .growth-axis-score { font-size: 14px; }
 }
 .growth-strength-foot {
   padding: 18px 26px 22px;
