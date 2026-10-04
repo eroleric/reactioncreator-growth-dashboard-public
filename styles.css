@@ -3346,7 +3346,7 @@ nav a.active {
 }
 .growth-strength-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 300px;
   align-items: start;
   gap: 20px;
   padding: 16px 26px 24px;
@@ -3412,23 +3412,45 @@ nav a.active {
 .growth-radar-axis:hover .growth-axis-dot,
 .growth-radar-axis:focus .growth-axis-dot { stroke: #132638; stroke-width: 4; }
 .growth-radar-axis:focus .growth-axis-label { text-decoration: underline; }
+.growth-radar-popup-slot {
+  position: relative;
+  min-height: 300px;
+  margin-top: 48px;
+}
+.growth-radar-hint {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 20px 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.growth-radar-hint span { color: #8b98a8; }
 .growth-radar-popup {
-  position: fixed;
-  z-index: 90;
-  width: min(310px, calc(100vw - 24px));
+  position: relative;
+  width: 100%;
   padding: 16px 18px;
   background: #fff;
   color: var(--ink);
   border: 1px solid #d4deeb;
   border-radius: 12px;
-  box-shadow: 0 12px 36px #17324d26;
+  box-shadow: 0 6px 20px #17324d12;
   font-size: 12px;
   line-height: 1.5;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 160ms ease, transform 160ms ease;
 }
+.growth-radar-popup.is-visible { opacity: 1; transform: translateY(0); }
+.growth-radar-popup-slot:has(.growth-radar-popup:not([hidden])) .growth-radar-hint { visibility: hidden; }
 .growth-radar-popup[hidden] { display: none; }
 .growth-radar-popup > strong { display: block; font-size: 14px; line-height: 1.35; }
 .growth-popup-score { display: block; margin-top: 5px; color: #526da6; font-size: 11px; }
 .growth-radar-popup p { margin: 10px 0 0; }
+@media (prefers-reduced-motion: reduce) {
+  .growth-radar-popup { transition: none; transform: none; }
+}
 @media (max-width: 600px) {
   .growth-axis-label { font-size: 18px; }
   .growth-axis-score { font-size: 14px; }
@@ -3454,6 +3476,7 @@ nav a.active {
     max-width: 680px;
     margin: 0 auto;
   }
+  .growth-radar-popup-slot { margin-top: 0; min-height: 280px; max-width: 640px; width: 100%; justify-self: center; }
 }
 @media (max-width: 600px) {
   .growth-strength-head {

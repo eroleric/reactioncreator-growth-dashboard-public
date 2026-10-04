@@ -675,24 +675,24 @@ function growthStrengthRadar(tasks) {
     }).join(''),
     shape='<polygon class="growth-radar-shape" points="'+scores.map((item,index)=>point(index,item.score).map(n=>n.toFixed(1)).join(',')).join(' ')+'"></polygon>',
     descriptions=scores.map(item=>'<template data-radar-content="'+item.id+'"><strong>'+esc(item.title)+'</strong><span class="growth-popup-score">'+item.score+'/5 · '+esc(item.outcome.state==='UNKNOWN' || item.outcome.state==='OUTDATED'?'Preparation; customer evidence pending':'Customer evidence: '+item.outcome.state.toLowerCase())+'</span><p><b>Already known</b><br>'+esc(item.knowledge.brief)+'</p><p><b>Still to learn</b><br>'+esc(item.knowledge.gap)+'</p></template>').join('');
-  return '<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">WORK PROGRESS</div><h2>Recorded work across Growth</h2><p>Hover a label, dot or spoke for what we know and what we still need to learn. Tap or use the keyboard on any area.</p></div><span class="tag neutral">Preparation &amp; evidence · 0–5</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="group" aria-label="Six-area preparation and evidence chart"><g class="growth-radar-grid">'+grid+'</g>'+shape+axes+'</svg><p class="growth-radar-key">Preparation can reach 3/5. Higher levels require current customer evidence.<br>A full score never means we know everything.</p></div><div id="growth-radar-popup" class="growth-radar-popup" role="tooltip" hidden></div>'+descriptions+'</div><div class="growth-strength-foot">'+growthMore('How the chart learns','<p>Existing knowledge, research, saved proof and earlier work receipts are retained under the six priorities. Untouched optional tasks are excluded, and receipts from merged tasks count through their surviving owner once per task.</p><p>The underlying work score uses one point for sourced knowledge and up to four for recorded progress. The visible score is capped at 3/5 while customer evidence is missing or outdated, 3.5 for customer reports, 4 for verified observations and 5 for a reviewed customer-behavior decision. These are evidence limits, not statistical confidence or conversion rates. An observed zero remains a dated finding, not business success.</p><p>Completed research cycles cannot prove the recurring customer problem is solved. A fuller web is not proof of growth; no area is permanently finished. Customer results keep their actual dates and classification. The book-informed aim is the next useful learning decision, not filling every spoke.</p>')+'</div></section>';
+  return '<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">WORK PROGRESS</div><h2>Recorded work across Growth</h2><p>Hover a label, dot or spoke for what we know and what we still need to learn. Tap or use the keyboard on any area.</p></div><span class="tag neutral">Preparation &amp; evidence · 0–5</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="group" aria-label="Six-area preparation and evidence chart"><g class="growth-radar-grid">'+grid+'</g>'+shape+axes+'</svg><p class="growth-radar-key">Preparation can reach 3/5. Higher levels require current customer evidence.<br>A full score never means we know everything.</p></div><div class="growth-radar-popup-slot"><p class="growth-radar-hint">Explore an area<br><span>Its explanation appears here.</span></p><div id="growth-radar-popup" class="growth-radar-popup" role="tooltip" hidden></div></div>'+descriptions+'</div><div class="growth-strength-foot">'+growthMore('How the chart learns','<p>Existing knowledge, research, saved proof and earlier work receipts are retained under the six priorities. Untouched optional tasks are excluded, and receipts from merged tasks count through their surviving owner once per task.</p><p>The underlying work score uses one point for sourced knowledge and up to four for recorded progress. The visible score is capped at 3/5 while customer evidence is missing or outdated, 3.5 for customer reports, 4 for verified observations and 5 for a reviewed customer-behavior decision. These are evidence limits, not statistical confidence or conversion rates. An observed zero remains a dated finding, not business success.</p><p>Completed research cycles cannot prove the recurring customer problem is solved. A fuller web is not proof of growth; no area is permanently finished. Customer results keep their actual dates and classification. The book-informed aim is the next useful learning decision, not filling every spoke.</p>')+'</div></section>';
 }
-let radarHideTimer, radarDismissed=false;
+let radarHideTimer, radarFadeTimer, radarDismissed=false;
 function hideRadarPopup() {
   clearTimeout(radarHideTimer);
+  clearTimeout(radarFadeTimer);
   document.querySelectorAll('.growth-radar-axis[aria-expanded="true"]').forEach(axis=>axis.setAttribute('aria-expanded','false'));
-  const popup=document.getElementById('growth-radar-popup');if(popup)popup.hidden=true;
+  const popup=document.getElementById('growth-radar-popup');
+  if(popup){popup.classList.remove('is-visible');radarFadeTimer=setTimeout(()=>{popup.hidden=true;},matchMedia('(prefers-reduced-motion: reduce)').matches?0:160);}
 }
 function showRadarPopup(axis) {
   clearTimeout(radarHideTimer);
+  clearTimeout(radarFadeTimer);
   const panel=axis.closest('.growth-strength'),popup=panel?.querySelector('.growth-radar-popup'),content=panel?.querySelector('template[data-radar-content="'+axis.dataset.strengthAxis+'"]');
   if(!popup || !content || radarDismissed)return;
   panel.querySelectorAll('.growth-radar-axis').forEach(a=>a.setAttribute('aria-expanded',String(a===axis)));
   popup.innerHTML=content.innerHTML;popup.hidden=false;
-  const anchor=axis.querySelector('.growth-axis-label').getBoundingClientRect(),box=popup.getBoundingClientRect(),margin=12;
-  popup.style.left=Math.max(margin,Math.min(innerWidth-box.width-margin,anchor.left+anchor.width/2-box.width/2))+'px';
-  const below=anchor.bottom+10;
-  popup.style.top=Math.max(margin,Math.min(innerHeight-box.height-margin,below))+'px';
+  requestAnimationFrame(()=>{if(axis.getAttribute('aria-expanded')==='true')popup.classList.add('is-visible');});
 }
 document.addEventListener('pointerover',event=>{
   const axis=event.target.closest?.('.growth-radar-axis');
@@ -700,7 +700,8 @@ document.addEventListener('pointerover',event=>{
   if(event.target.closest?.('.growth-radar-popup'))clearTimeout(radarHideTimer);
 });
 document.addEventListener('pointerout',event=>{
-  if(event.target.closest?.('.growth-radar-axis,.growth-radar-popup') && !event.relatedTarget?.closest?.('.growth-radar-axis,.growth-radar-popup'))radarHideTimer=setTimeout(hideRadarPopup,160);
+  const layout=event.target.closest?.('.growth-strength-layout');
+  if(layout && !layout.contains(event.relatedTarget) && !layout.contains(document.activeElement))radarHideTimer=setTimeout(hideRadarPopup,260);
 });
 document.addEventListener('focusin',event=>{const axis=event.target.closest?.('.growth-radar-axis');if(axis){radarDismissed=false;showRadarPopup(axis);}else hideRadarPopup();});
 document.addEventListener('click',event=>{const axis=event.target.closest?.('.growth-radar-axis');if(axis){radarDismissed=false;showRadarPopup(axis);}else if(!event.target.closest?.('.growth-radar-popup'))hideRadarPopup();});
@@ -708,10 +709,6 @@ document.addEventListener('keydown',event=>{
   if(event.key==='Escape'){radarDismissed=true;hideRadarPopup();}
   const axis=event.target.closest?.('.growth-radar-axis');if(axis && ['Enter',' '].includes(event.key)){event.preventDefault();radarDismissed=false;showRadarPopup(axis);}
 });
-window.addEventListener('wheel',hideRadarPopup,{passive:true});
-window.addEventListener('touchmove',hideRadarPopup,{passive:true});
-window.addEventListener('scroll',()=>{const axis=document.querySelector('.growth-radar-axis[aria-expanded="true"]');if(axis)showRadarPopup(axis);},true);
-window.addEventListener('resize',hideRadarPopup);
 
 function growth() {
   const g = data.growthSystem;
