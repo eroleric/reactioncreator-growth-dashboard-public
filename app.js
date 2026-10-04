@@ -1,3 +1,4 @@
+import {reconcileTaskState, completedScopeWork} from './task-state.js?v=20261003-status-scope';
 import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeLearningAnswer } from "./strategy-answer.js?v=20260925-learning-1";
 import { mountOutreach, resetOutreach } from './outreach.js?v=20260926-2';
 import {metricState,periodLabel,milestoneState,growthPriorityScores,growthWorkScores,growthRadarScores} from './decision-model.js?v=20261004-radar-popups';
@@ -129,6 +130,18 @@ const taskCountLabel = (count) => `${count} ${count === 1 ? "task" : "tasks"}`;
 const tag = (s) =>
   `<span class="tag ${statusClass(s)}">${esc(label(s))}</span>`;
 const taskStatus = t => adminState.taskOverrides[t.id] || t.status;
+const taskStatusLabel = t => label(taskStatus(t)) + (adminState.taskUpdates?.[t.id] ? ' · admin update' : '');
+const taskStatusTag = t => tag(taskStatus(t)) + (adminState.taskUpdates?.[t.id] ? '<small class="subtle">Admin update · awaiting evidence review</small>' : '');
+function taskScopeDetail(t) {
+  const completed = completedScopeWork(t, data.growthSystem);
+  const requests = (t.execution?.ownerRequestedSelections || []).filter(item => !item.supersededBy && item.status !== 'COMPLETE');
+  const prior = adminState.taskReviewUpdates?.[t.id] || [];
+  return '<section class="task-scope-summary"><h3>What this status covers</h3><p>' + esc(t.execution?.output || t.success) + '</p>' +
+    (adminState.taskUpdates?.[t.id] ? '<p>Project record: ' + esc(label(data.adminState?.taskOverrides?.[t.id] || t.status)) + '. The admin update is awaiting evidence review.</p>' : '') +
+    (completed.length ? '<h4>Already finished — reuse this work</h4><ul>' + completed.map(item => '<li>' + esc(item.label) + '</li>').join('') + '</ul>' : '') +
+    (requests.length ? '<h4>Separate requested work</h4><ul>' + requests.map(item => '<li>' + esc(item.scopeLabel || item.source) + ' · ' + esc(label(item.status)) + '</li>').join('') + '</ul>' : '') +
+    (prior.length ? '<details><summary>Earlier dashboard updates need review</summary><p>The current project record is shown above. These saved updates belong to an earlier or unconfirmed scope and have been kept for review.</p><ul>' + prior.map(item => '<li>' + esc(label(item.status)) + ': ' + esc(item.note || 'No note recorded') + '</li>').join('') + '</ul></details>' : '') + '</section>';
+}
 function taskStatusSummary(tasks) {
   const counts = { complete: 0, inProgress: 0, waiting: 0, blocked: 0 };
   tasks.forEach((task) => {
@@ -221,6 +234,7 @@ function unpackTaskText(value) {
     const parsed = JSON.parse(text);
     return {
       note: typeof parsed.note === "string" ? parsed.note : "",
+      sourceRevision: typeof parsed.sourceRevision === "string" ? parsed.sourceRevision : "",
       blockedReason:
         typeof parsed.blockedReason === "string" ? parsed.blockedReason : "",
     };
@@ -228,8 +242,8 @@ function unpackTaskText(value) {
     return { note: text, blockedReason: "" };
   }
 }
-const packTaskText = (note, blocker) =>
-  JSON.stringify({ dashboardTaskText: 1, note, blockedReason: blocker });
+const packTaskText = (note, blocker, sourceRevision) =>
+  JSON.stringify({ dashboardTaskText: 1, note, blockedReason: blocker, sourceRevision });
 function instructionSteps(action) {
   const steps = String(action || "")
     .replace(/\s+/g, " ")
@@ -262,7 +276,7 @@ function taskDetail(id, currentNote = "", currentBlocker = "") {
   openDetail(
     `${t.id} · ${phase?.title || t.phaseId}`,
     t.title,
-    `<div class="task-detail-summary">${tag(taskStatus(t))}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${taskStatus(t) === "BLOCKED" ? item("Why blocked", esc(blocker)) : ""}${taskNeedsAdmin(t) ? item("Admin steps", taskAdminSteps(t)) : ""}${t.execution ? item("AI execution recipe", growthRecipe(t)) : ""}${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
+    `<div class="task-detail-summary">${taskStatusTag(t)}<span>${taskNeedsAdmin(t) ? "Admin help needed" : "AI task"}</span></div><div class="task-detail-grid">${taskStatus(t) === "BLOCKED" ? item("Why blocked", esc(blocker)) : ""}${taskNeedsAdmin(t) ? item("Admin steps", taskAdminSteps(t)) : ""}${t.execution ? item("AI execution recipe", growthRecipe(t)) : ""}${item("Note or evidence", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${item("Useful for / why it matters", esc(w.guidance || "No additional guidance recorded."))}${item("Success criteria", esc(t.success))}${item("Work context", esc([w.workstream, w.priority && `${w.priority} priority`, w.support && `Support: ${w.support}`].filter(Boolean).join(" · ") || "Not recorded"))}${item("Original target", esc(t.target || "Not recorded"))}${item("Source", source)}</div>`,
   );
 }
 const openOwnerActions = () => data.owners.filter(item => ["OPEN", "BLOCKED"].includes(item.status));
@@ -594,7 +608,7 @@ function aiPriorityList(tasks) {
     const task = tasks.find(t => t.id === item.taskId);
     if (!task) return "";
     const state = roadmapWorkState([task.id]);
-    return `<button class="ai-priority-task roadmap-tank-card ${statusClass(taskStatus(task))}" ${roadmapWaterAttributes(state,`ai-task:${task.id}`)} data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}">${roadmapWater()}<span class="ai-priority-rank" aria-hidden="true">${taskStatus(task) === 'COMPLETE' ? '✓' : item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><small class="roadmap-card-status">${esc(label(taskStatus(task)))}</small></span></button>`;
+    return `<button class="ai-priority-task roadmap-tank-card ${statusClass(taskStatus(task))}" ${roadmapWaterAttributes(state,`ai-task:${task.id}`)} data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}">${roadmapWater()}<span class="ai-priority-rank" aria-hidden="true">${taskStatus(task) === 'COMPLETE' ? '✓' : item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><small class="roadmap-card-status">${esc(taskStatusLabel(task))}</small></span></button>`;
   });
   const overflow = rows.slice(5);
   return `<section class="panel growth-panel roadmap-tank ai-roadmap" aria-labelledby="ai-roadmap-title"><div class="roadmap-tank-content"><header class="roadmap-tank-heading"><h2 id="ai-roadmap-title">${esc(priorities.title)}</h2>${roadmapProgress(progress)}</header><p class="roadmap-lead">The next tasks for the first five subscribers. Open a task for details.</p><div class="ai-priority-list ai-priority-list-horizontal" style="--roadmap-columns:${Math.max(1,Math.min(5,rows.length))}">${rows.slice(0,5).join("")}</div>${overflow.length ? growthMore(`${overflow.length} more roadmap-aligned ${overflow.length === 1 ? "task" : "tasks"}`, `<div class="ai-priority-list ai-priority-list-horizontal">${overflow.join("")}</div>`) : ""}<div class="roadmap-tank-footer"><details class="roadmap-progress-info"><summary>About this progress</summary><p>${esc(roadmapProgressNote(progress))}</p><p>Synced with Growth plan and What happens next · reviewed ${esc(priorities.alignment.reviewedAt)}.</p></details><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button></div></div></section>`;
@@ -606,7 +620,7 @@ function aiPriorityDetail(t) {
   return `<div class="ai-priority-detail"><p><strong>What happens next:</strong> ${esc(stage?.label || item.stageId)} · ${esc(item.planRole)}</p><p><strong>Priority ${item.rank} · Why now:</strong> ${esc(item.reason)}</p><p><strong>Codex will prepare:</strong> ${esc(growthTaskDone(t))}</p><p><strong>Estimated effort:</strong> ${esc(item.effort)}</p>${growthMore("How we’ll judge this task", `<p>${esc(item.measure)}</p><p><strong>Confidence:</strong> ${esc(item.confidence)}</p><p><strong>Done means:</strong> ${esc(growthTaskDone(t))}</p><p>Completing this preparation does not mean a campaign was delivered or produced growth.</p>`)}<p><strong>Reused by:</strong> ${t.execution.relatedTasks.map(id => {const related = data.tasks.find(task => task.id === id); return `<button class="text-btn" data-task-detail="${esc(id)}">${esc(related ? growthTaskTitle(related) : id)}</button>`;}).join(" · ")}</p></div>`;
 }
 function oneTimeTaskList(tasks) {
-  const button = t => `<button class="growth-simple-task ${growthTaskType(t) === "RECURRING" ? "recurring-simple-task" : "one-time-simple-task"}" data-task-detail="${esc(t.id)}" data-growth-searchable="${esc(`${t.id} ${growthTaskTitle(t)} ${growthTaskSummary(t)}`.toLowerCase())}"><span class="growth-simple-task-copy">${taskTypeBadge(t, true)}${esc(growthTaskTitle(t))}</span><small>${esc(label(taskStatus(t)))}</small></button>`;
+  const button = t => `<button class="growth-simple-task ${growthTaskType(t) === "RECURRING" ? "recurring-simple-task" : "one-time-simple-task"}" data-task-detail="${esc(t.id)}" data-growth-searchable="${esc(`${t.id} ${growthTaskTitle(t)} ${growthTaskSummary(t)}`.toLowerCase())}"><span class="growth-simple-task-copy">${taskTypeBadge(t, true)}${esc(growthTaskTitle(t))}</span><small>${esc(taskStatusLabel(t))}</small></button>`;
   const matching = tasks.filter(t => growthTaskType(t) === "ONE_TIME" && workflowMode(data.growthSystem, t.id) === "REQUIRED").sort((a, b) => a.sourceRow - b.sourceRow);
   return `<section class="growth-task-type-list one-time"><header><span class="task-type-badge one-time">One Time</span><strong>${matching.length} required tasks</strong><p>Use these only when their condition applies. Completed work is reused.</p></header><div class="growth-simple-tasks">${matching.map(button).join("")}</div></section>`;
 }
@@ -637,7 +651,7 @@ const growthMore = (title, body, extra = "") => `<details class="growth-more ${e
 function growthTaskDetail(t, currentNote = "", currentBlocker = "") {
   const packet = data.growthSystem.approvals.find(p => p.status === "READY" && p.taskIds.includes(t.id));
   const note = currentNote || adminState.taskNotes?.[t.id] || t.evidence;
-  openDetail("AI TASK", growthTaskTitle(t), `<div class="growth-simple-detail">${tag(taskStatus(t))}${taskTypeBadge(t)}<p class="growth-lead">${esc(growthTaskSummary(t))}</p>${workflowMode(data.growthSystem,t.id) === "OPTIONAL" ? '<p><strong>Optional / Admin Approval:</strong> Outside the default workflow. Explicit admin direction is required for this task and scope; copying instructions alone does not approve it.</p>' : ""}${growthTaskExplanation(t)}${taskTimelineContext(t)}${aiPriorityDetail(t)}${expectedResultsForTask(t)}${taskStatus(t) === "BLOCKED" ? `<p><strong>What is holding this up:</strong> ${esc(currentBlocker || blockedReason(t))}</p>` : ""}<h3>Your part</h3><h4>Admin steps</h4>${taskAdminSteps(t)}${t.execution.adminGuide?.adminHelp ? growthMore("When admin help may be needed", `<p>${esc(t.execution.adminGuide.adminHelp)}</p>`) : ""}<button class="quiet" data-growth-brief="${esc(t.id)}">Copy instructions for Codex</button><p class="subtle">Paste into Codex to request this task. Copying does not start it.</p>${growthMore("Latest task note", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${growthMore("Technical instructions for Codex", `<p class="subtle">${esc(t.id)}</p>${growthRecipe(t)}<h3>Success looks like</h3><p>${esc(t.success)}</p>`)}</div>`);
+  openDetail("AI TASK", growthTaskTitle(t), `<div class="growth-simple-detail">${taskStatusTag(t)}${taskTypeBadge(t)}<p class="growth-lead">${esc(growthTaskSummary(t))}</p>${workflowMode(data.growthSystem,t.id) === "OPTIONAL" ? '<p><strong>Optional / Admin Approval:</strong> Outside the default workflow. Explicit admin direction is required for this task and scope; copying instructions alone does not approve it.</p>' : ""}${taskScopeDetail(t)}${growthTaskExplanation(t)}${taskTimelineContext(t)}${aiPriorityDetail(t)}${expectedResultsForTask(t)}${taskStatus(t) === "BLOCKED" ? `<p><strong>What is holding this up:</strong> ${esc(currentBlocker || blockedReason(t))}</p>` : ""}<h3>Your part</h3><h4>Admin steps</h4>${taskAdminSteps(t)}${t.execution.adminGuide?.adminHelp ? growthMore("When admin help may be needed", `<p>${esc(t.execution.adminGuide.adminHelp)}</p>`) : ""}<button class="quiet" data-growth-brief="${esc(t.id)}">Copy instructions for Codex</button><p class="subtle">Paste into Codex to request this task. Copying does not start it.</p>${growthMore("Latest task note", `<div class="task-note-expanded">${formatTaskNote(note)}</div>`)}${growthMore("Technical instructions for Codex", `<p class="subtle">${esc(t.id)}</p>${growthRecipe(t)}<h3>Success looks like</h3><p>${esc(t.success)}</p>`)}</div>`);
 }
 function growthContract(r) {
   const c=r.executionContract;
@@ -654,7 +668,7 @@ function growthBrief(id) {
   const r = data.growthSystem?.routines.find(r => r.id === id);
   const aiUseText = aiUseBrief(data.growthSystem, t?.id);
   const workflowText = 'Use a goal-first, low-friction approach. Follow executionPolicy.goalFirst: select the shortest necessary available stage; reuse existing proof; combine overlapping work. Keep optional tasks and extra steps in Optional / Admin Approval. Do not select or schedule optional work without explicit human approval recorded for that task and scope; ONE_RUN does not enable recurring selection. A direct human request covers only its stated scope. Honor already authorized due commitments and urgent support/stop rules within scope. Advance a ready smaller batch without filling quotas. ';
-  const taskText = t?.execution ? `${t.id}: ${t.title}. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Business measure: ${t.execution.successMeasure || t.success}. Reuse through: ${(t.execution.relatedTasks || []).join(", ") || "the existing Growth routines"}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
+  const taskText = t?.execution ? `${t.id}: ${t.title}. Authoritative current status: ${data.adminState?.taskOverrides?.[t.id] || t.status}. Current scope: ${t.execution.output}. Already finished (reuse): ${completedScopeWork(t,data.growthSystem).map(item=>item.label).join("; ") || "Read the source evidence"}. Any dashboard admin update remains evidence to reconcile, not proof. Trigger: ${t.execution.trigger}. Inputs: ${t.execution.inputs.join(", ")}. Steps: ${t.execution.steps.join("; ")}. Output: ${t.execution.output}. Verify: ${t.execution.verify}. Record in: ${t.execution.recordIn}. Business measure: ${t.execution.successMeasure || t.success}. Reuse through: ${(t.execution.relatedTasks || []).join(", ") || "the existing Growth routines"}. Release boundary: ${t.execution.release}. Stop: ${t.execution.stop}` : `${r?.title || "Daily Growth run"}: ${(r?.steps || []).join("; ")}`;
   return `Work only in the Reaction Creator Growth system. Read 00_ADMIN/PROJECT_INSTRUCTIONS.md, 01_STRATEGY/GROWTH_EXECUTION.md and 01_STRATEGY/GROWTH_OPERATING_SYSTEM.json, plus current Growth task evidence, metrics, budget and lessons. Treat removedTasks as inactive history only; never select, schedule, resume or execute an archived task. ${workflowText}${aiUseText} ${taskText} ${t?.execution?.executionContract ? `Execution contract: ${JSON.stringify(t.execution.executionContract)}.` : `Select only the routine task IDs allowed by goalFirst and explicit recurring approvals. Preflight the selected candidate contract and skip absent triggers without completing a task.`} Before any task or routine, run node dashboard/scripts/admin-actions.mjs pending and process strategy answers and approved Admin Strategy Knowledge under their intake procedures in GROWTH_EXECUTION.md. Reconcile tasks and replace processed questions before choosing work. Read common context once per run and relevant selected-task inputs, output records and recent receipts only. Update applicable commonUpdate and contract updateFiles only when evidence changed. Artifact prerequisites hold only the dependent stage; verify actual dated outputs, not completion checkboxes. Select useful Growth work within existing authority. Check the task-specific inputs and exact existing authorization before acting. Do not send messages, publish, change product/pricing or commit money without the required explicit authorization. Reuse a completed period receipt and inspect uncertain prior outcomes before retrying. Finish all safe independent work; create a concrete final admin packet only when necessary. When completing a task or recurring cycle, follow the Expected Task Results completion rule in GROWTH_EXECUTION.md: review the automatic estimate and record an evidence-specific forecast in the private brain with expected outcome, first-result days and timing anchor, Day 1/3/7/14/30 impacts, confidence and assumptions. Numerical ranges require a documented basis; preparation alone is not acquisition. Record actual outputs, evidence, lesson and next review date; do not call drafts published or a recurring routine scheduled. Refresh and validate the encrypted dashboard after material updates.`;
 }
 function growthPanel(title, body, extra = "") {
@@ -895,7 +909,7 @@ function growthNextPanel() {
       const state = roadmapWorkState(stage.taskIds, revisionIndex === 0);
       return `<button class="timeline-stop roadmap-tank-card ${stage.id === selected.id ? "selected" : ""} ${roadmapCardClass(state)}" ${roadmapWaterAttributes(state,`timeline:${revision.id}:${stage.id}`)} data-timeline-stage="${esc(stage.id)}" aria-pressed="${stage.id === selected.id}" aria-controls="roadmap-timeline-stage-detail">${roadmapWater()}<span class="timeline-node" aria-hidden="true">${state.complete === state.total && state.total ? '✓' : i+1}</span><span class="roadmap-step-copy"><strong>${esc(stage.label)}</strong><small class="roadmap-card-status">${esc(roadmapCardStatus(state))}</small></span></button>`;
     }).join("")}</div>
-    <details id="roadmap-timeline-stage-detail" class="simple-step timeline-more" ${growth.timelineDetailsOpen ? 'open' : ''} aria-label="Selected growth step"><summary>View step details</summary><h3>${esc(selected.title)}</h3><p>${esc(selected.outcome)}</p><p class="timeline-window">${esc(selected.window)}</p><div class="timeline-more-body"><div class="timeline-task-list">${selected.taskIds.map(id => {const t=data.tasks.find(t=>t.id===id);return t ? `<button data-task-detail="${esc(id)}"><span><strong>${esc(growthTaskTitle(t))}</strong><small>${esc(label(taskStatus(t)))}</small></span><span aria-hidden="true">→</span></button>` : '';}).join("")}</div><dl><dt>Starts when</dt><dd>${esc(selected.start)}</dd><dt>Ready for the next step</dt><dd>${esc(selected.gate)}</dd><dt>Can happen alongside</dt><dd>${esc(selected.parallel)}</dd><dt>Up next</dt><dd>${esc(selected.next)}</dd></dl></div><p class="subtle">${esc(plan.timingNote)}</p></details>
+    <details id="roadmap-timeline-stage-detail" class="simple-step timeline-more" ${growth.timelineDetailsOpen ? 'open' : ''} aria-label="Selected growth step"><summary>View step details</summary><h3>${esc(selected.title)}</h3><p>${esc(selected.outcome)}</p><p class="timeline-window">${esc(selected.window)}</p><div class="timeline-more-body"><div class="timeline-task-list">${selected.taskIds.map(id => {const t=data.tasks.find(t=>t.id===id);return t ? `<button data-task-detail="${esc(id)}"><span><strong>${esc(growthTaskTitle(t))}</strong><small>${esc(taskStatusLabel(t))}</small></span><span aria-hidden="true">→</span></button>` : '';}).join("")}</div><dl><dt>Starts when</dt><dd>${esc(selected.start)}</dd><dt>Ready for the next step</dt><dd>${esc(selected.gate)}</dd><dt>Can happen alongside</dt><dd>${esc(selected.parallel)}</dd><dt>Up next</dt><dd>${esc(selected.next)}</dd></dl></div><p class="subtle">${esc(plan.timingNote)}</p></details>
     <details class="roadmap-progress-info roadmap-history" ${growth.timelineHistoryOpen ? 'open' : ''}><summary>Plan history &amp; progress</summary><p>${esc(roadmapProgressNote(progress))}</p><div class="roadmap-plan-revision"><p class="timeline-revision-summary">${esc(revision.summary)}</p><div class="timeline-revision-controls"><span data-timeline-revision-position aria-live="polite">${revisionIndex === 0 ? 'Current plan' : `Previous plan ${revisionIndex} of ${revisions.length - 1}`}</span><button type="button" data-timeline-revision="previous" aria-label="View newer What happens next plan" ${revisionIndex === 0 ? 'disabled' : ''}>←</button><button type="button" data-timeline-revision="next" aria-label="View older What happens next plan" ${revisionIndex === revisions.length - 1 ? 'disabled' : ''}>→</button></div></div></details></div>
   </section>`;
 }
@@ -1081,6 +1095,9 @@ async function patchSharedDashboard(values) {
   if (!response.ok) throw new Error(`Save failed (${response.status})`);
 }
 async function loadSharedDashboardState() {
+  const retainedOverviewNote = adminState.overviewNote;
+  adminState = reconcileTaskState(data.tasks, data.adminState, adminState);
+  adminState.overviewNote = retainedOverviewNote;
   try {
     const response = await fetch(`${sharedDashboardApi}?t=${Date.now()}`, {
       cache: "no-store",
@@ -1095,20 +1112,15 @@ async function loadSharedDashboardState() {
     }));
     if (shared && typeof shared.overviewNote === "string")
       adminState.overviewNote = shared.overviewNote;
+    const incoming = {taskUpdates: {}};
     for (const [id, item] of Object.entries(shared?.tasks || {})) {
-      const task = data.tasks.find((t) => t.id === id);
-      if (
-        task &&
-        ["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].includes(
-          item?.status,
-        )
-      ) {
-        adminState.taskOverrides[id] = item.status;
-        const taskText = unpackTaskText(item.note);
-        adminState.taskNotes[id] = taskText.note;
-          adminState.taskBlockers[id] = taskText.blockedReason;
-      }
+      const text = unpackTaskText(item.note);
+      incoming.taskUpdates[id] = {status: item.status, note: text.note, blockedReason: text.blockedReason,
+        sourceRevision: text.sourceRevision || '', updatedAt: item.updatedAt || ''};
     }
+    const overviewNote = adminState.overviewNote;
+    adminState = reconcileTaskState(data.tasks, data.adminState, adminState, incoming);
+    adminState.overviewNote = overviewNote;
     noteSyncStatus = "Shared across devices";
     await saveAdminState();
   } catch {
@@ -1128,6 +1140,8 @@ async function saveSharedTask(id, status, note, blocker) {
     !["COMPLETE", "IN PROGRESS", "NOT STARTED", "BLOCKED"].includes(status)
   )
     throw new Error("Invalid task update");
+  if (status === "COMPLETE" && ["DAILY", "WEEKLY", "MONTHLY"].includes(task.execution?.cadence))
+    throw new Error("Record the completed run in its evidence; an ongoing task stays open.");
   if (status === "COMPLETE" && !note)
     throw new Error(
       "Add completion evidence before marking this task complete.",
@@ -1135,7 +1149,7 @@ async function saveSharedTask(id, status, note, blocker) {
   if (status === "BLOCKED" && !blocker)
     throw new Error("Add the blocking reason before saving this task.");
   const packedText =
-    packTaskText(note, blocker);
+    packTaskText(note, blocker, task.sourceRevision);
   if (packedText.length > 1000)
     throw new Error("Note or evidence must be 1000 characters or fewer.");
   await patchSharedDashboard({
@@ -1145,6 +1159,8 @@ async function saveSharedTask(id, status, note, blocker) {
       updatedAt: new Date().toISOString(),
     },
   });
+  adminState.taskUpdates ||= {};
+  adminState.taskUpdates[id] = {status, note, blockedReason: blocker, sourceRevision: task.sourceRevision, updatedAt: new Date().toISOString()};
   adminState.taskOverrides[id] = status;
   adminState.taskNotes[id] = note;
   adminState.taskBlockers[id] = blocker;
@@ -1366,14 +1382,7 @@ async function pinKey(pin, salt, iterations = 120000) {
 }
 async function loadAdminState() {
   const base = data.adminState || {};
-  adminState = {
-    overviewNote: base.overviewNote || "",
-    taskOverrides: { ...(base.taskOverrides || {}) },
-    taskNotes: { ...(base.taskNotes || {}) },
-    taskBlockers: { ...(base.taskBlockers || {}) },
-    project: { ...(base.project || {}) },
-    updates: [...(base.updates || [])],
-  };
+  adminState = reconcileTaskState(data.tasks, base);
   const saved = localStorage.getItem(localKey);
   if (!saved) {
     return;
@@ -1393,12 +1402,9 @@ async function loadAdminState() {
       local = JSON.parse(new TextDecoder().decode(clear));
     if (typeof local.overviewNote === "string")
       adminState.overviewNote = local.overviewNote;
-    if (local.taskOverrides && typeof local.taskOverrides === "object")
-      Object.assign(adminState.taskOverrides, local.taskOverrides);
-    if (local.taskNotes && typeof local.taskNotes === "object")
-      Object.assign(adminState.taskNotes, local.taskNotes);
-    if (local.taskBlockers && typeof local.taskBlockers === "object")
-      Object.assign(adminState.taskBlockers, local.taskBlockers);
+    const overviewNote = adminState.overviewNote;
+    adminState = reconcileTaskState(data.tasks, base, local);
+    adminState.overviewNote = overviewNote;
   } catch {
     localStorage.removeItem(localKey);
   }
