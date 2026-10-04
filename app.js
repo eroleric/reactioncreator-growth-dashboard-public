@@ -3,7 +3,7 @@ import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeL
 import { mountOutreach, resetOutreach } from './outreach.js?v=20260926-2';
 import {metricState,periodLabel,milestoneState,growthPriorityScores,growthWorkScores,growthRadarScores,rankedGrowthTasks,nextActions} from './decision-model.js?v=20261004-shared-next-tasks';
 import {workflowMode,canSelectAutomatically,aiUseBrief} from './workflow.js?v=20261003-ai-use';
-import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
+import { completedTaskResults, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app-check.js";
 import { GoogleAuthProvider, getAuth, getIdTokenResult, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
@@ -499,7 +499,7 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Task Results"]];
+  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"]];
   if (creatorDiscoveryTabVisible) tabs.splice(2, 0, ["discovery", "Creator discovery"]);
   if (creatorDiscoveryTabVisible) tabs.unshift(["actions", "Admin Actions"]);
   const discoveryLabel = creatorDiscoveryTabVisible ? "Hide Admin Actions and Creator Discovery tabs" : "Show Admin Actions and Creator Discovery tabs";
@@ -514,19 +514,15 @@ function expectedResultsForTask(task) {
   if (!results.length) return "";
   return `<section class="task-expected-results"><h3>Expected Task Result</h3>${results.map(result => results.length > 1 ? growthMore(`Completed cycle · ${esc(result.periodKey || "Task")}`, expectedResultBody(result)) : expectedResultBody(result)).join("")}</section>`;
 }
-function growthExpectedResults() {
-  const results = completedTaskResults(data, adminState);
-  $("#main").innerHTML = head("Expected Task Results", "What completed work may change, when to look for an effect, and how certain the estimate is.") + growthNavigation() + `<div class="growth-workspace expected-results-workspace"><p class="expected-results-intro">Generated automatically for completed Growth tasks and completed recurring cycles. These forecasts stay separate from measured results.</p>${results.length ? `<div class="expected-results-toolbar"><p>${results.length} completed ${results.length === 1 ? "item" : "items"}</p><label>Find a completed task<input id="expected-result-search" type="search" placeholder="Search task or impact"></label><label>Confidence<select id="expected-result-confidence"><option value="ALL">All levels</option><option>Low</option><option>Medium</option><option>High</option></select></label></div><div id="expected-results-list"></div>` : `<section class="panel expected-results-empty"><h2>No completed Growth tasks yet</h2><p>When AI records a completed task or cycle, its expected outcome, timing, impact, confidence and assumptions will appear here automatically.</p><p>Day 1, 3, 7, 14 and 30 are included, with longer windows where relevant. Unknown traffic or conversion rates stay explicit.</p><button class="quiet" data-expected-example>Preview an example</button><button class="text-btn" data-growth-tab="work">Go to AI work →</button></section>`}</div>`;
-  if (!results.length) return;
-  const render = () => {
-    const query = $("#expected-result-search").value.trim().toLowerCase();
-    const confidence = $("#expected-result-confidence").value;
-    const matches = results.filter(result => (confidence === "ALL" || result.confidence === confidence) && `${result.taskId} ${result.taskTitle} ${result.expectedImpact.metric}`.toLowerCase().includes(query));
-    $("#expected-results-list").innerHTML = matches.length ? matches.map(result => `<details class="panel expected-result-card" data-expected-task="${esc(result.taskId)}"><summary><span><strong>${esc(result.taskTitle)}</strong><small>${esc(result.completionKind)}${result.periodKey ? ` · ${esc(result.periodKey)}` : ""} · ${esc(result.method)}</small></span><span class="expected-card-meta"><span>${esc(firstResultLabel(result.firstResult))}</span><span class="expected-confidence ${esc(result.confidence.toLowerCase())}">${esc(result.confidence)} confidence</span></span></summary>${expectedResultBody(result)}<button class="text-btn expected-open-task" data-task-detail="${esc(result.taskId)}">Open completed task →</button></details>`).join("") : '<p class="panel empty">No completed tasks match these filters.</p>';
-  };
-  $("#expected-result-search").addEventListener("input", render);
-  $("#expected-result-confidence").addEventListener("change", render);
-  render();
+function completedGrowthWork(tasks, priorityCards = []) {
+  const records=completedTaskResults(data,adminState), counts=new Map();
+  for(const record of records)counts.set(record.taskId,(counts.get(record.taskId)||0)+1);
+  const priorityIds=new Set(rankedGrowthTasks(data.growthSystem,tasks,adminState).filter(item=>item.status==='COMPLETE').map(item=>item.taskId));
+  const otherTasks=tasks.filter(task=>counts.has(task.id) && !priorityIds.has(task.id));
+  const total=priorityIds.size+otherTasks.length;
+  if(!total)return '';
+  const rows=otherTasks.map(task=>'<button class="growth-simple-task" data-completed-task="'+esc(task.id)+'" data-task-detail="'+esc(task.id)+'"><span class="growth-simple-task-copy">'+esc(growthTaskTitle(task))+'</span><small>'+counts.get(task.id)+' completion record'+(counts.get(task.id)===1?'':'s')+' · Current task: '+esc(taskStatusLabel(task))+'</small></button>').join('');
+  return growthMore('Completed work ('+total+' '+(total===1?'task':'tasks')+')','<p class="subtle">Open a task for its finished work, evidence and expected result. Completed cycles can belong to an ongoing task.</p>'+(priorityCards.length?'<div class="ai-priority-list ai-priority-list-horizontal">'+priorityCards.join('')+'</div>':'')+'<div class="growth-simple-tasks">'+rows+'</div>','completed-work completed-priorities');
 }
 function growthDiscovery() {
   const discovery = data.creatorDiscovery || {batchCount:0,scanned:0,discoveryLeads:0,suitable:0,reservesRejected:0,routes:{socialDm:0,publicEmail:0,newRoute:0}};
@@ -616,12 +612,12 @@ function aiPriorityList(tasks) {
     const task = tasks.find(t => t.id === item.taskId);
     if (!task) return "";
     const state = roadmapWorkState([task.id]);
-    return `<button class="ai-priority-task roadmap-tank-card ${statusClass(taskStatus(task))}" ${roadmapWaterAttributes(state,`ai-task:${task.id}`)} data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}">${roadmapWater()}<span class="ai-priority-rank" aria-hidden="true">${taskStatus(task) === 'COMPLETE' ? '✓' : item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><small class="roadmap-card-status">${esc(taskStatusLabel(task))}</small></span></button>`;
+    return `<button class="ai-priority-task roadmap-tank-card ${statusClass(taskStatus(task))}" ${roadmapWaterAttributes(state,`ai-task:${task.id}`)} data-task-detail="${esc(task.id)}" data-ai-priority="${item.rank}" ${item.status==='COMPLETE' ? 'data-completed-task="'+esc(task.id)+'"' : ''}>${roadmapWater()}<span class="ai-priority-rank" aria-hidden="true">${taskStatus(task) === 'COMPLETE' ? '✓' : item.rank}</span><span class="ai-priority-copy"><strong>${esc(growthTaskTitle(task))}</strong><small class="roadmap-card-status">${esc(taskStatusLabel(task))}</small></span></button>`;
   };
   const rows = ranked.filter(item=>item.status!=='COMPLETE').map(card);
   const completed = ranked.filter(item=>item.status==='COMPLETE').map(card);
   const overflow = rows.slice(5);
-  return `<section class="panel growth-panel roadmap-tank ai-roadmap" aria-labelledby="ai-roadmap-title"><div class="roadmap-tank-content"><header class="roadmap-tank-heading"><h2 id="ai-roadmap-title">${esc(priorities.title)}</h2>${roadmapProgress(progress)}</header><p class="roadmap-lead">The full priority list shown in Overview, in the same order. Open a task for details.</p><div class="ai-priority-list ai-priority-list-horizontal" style="--roadmap-columns:${Math.max(1,Math.min(5,rows.length))}">${rows.slice(0,5).join("") || '<p>All ranked priorities are complete. Review the next useful work.</p>'}</div>${overflow.length ? growthMore(`${overflow.length} more roadmap-aligned ${overflow.length === 1 ? "task" : "tasks"}`, `<div class="ai-priority-list ai-priority-list-horizontal">${overflow.join("")}</div>`) : ""}${completed.length ? growthMore("Completed priorities ("+completed.length+")", '<div class="ai-priority-list ai-priority-list-horizontal">'+completed.join("")+'</div>', "completed-priorities") : ""}<div class="roadmap-tank-footer"><details class="roadmap-progress-info"><summary>About this progress</summary><p>${esc(roadmapProgressNote(progress))}</p><p>Synced with Growth plan and What happens next · reviewed ${esc(priorities.alignment.reviewedAt)}.</p></details><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button></div></div></section>`;
+  return `<section class="panel growth-panel roadmap-tank ai-roadmap" aria-labelledby="ai-roadmap-title"><div class="roadmap-tank-content"><header class="roadmap-tank-heading"><h2 id="ai-roadmap-title">${esc(priorities.title)}</h2>${roadmapProgress(progress)}</header><p class="roadmap-lead">The full priority list shown in Overview, in the same order. Open a task for details.</p><div class="ai-priority-list ai-priority-list-horizontal" style="--roadmap-columns:${Math.max(1,Math.min(5,rows.length))}">${rows.slice(0,5).join("") || '<p>All ranked priorities are complete. Review the next useful work.</p>'}</div>${overflow.length ? growthMore(`${overflow.length} more roadmap-aligned ${overflow.length === 1 ? "task" : "tasks"}`, `<div class="ai-priority-list ai-priority-list-horizontal">${overflow.join("")}</div>`) : ""}${completedGrowthWork(tasks,completed)}<div class="roadmap-tank-footer"><details class="roadmap-progress-info"><summary>About this progress</summary><p>${esc(roadmapProgressNote(progress))}</p><p>Synced with Growth plan and What happens next · reviewed ${esc(priorities.alignment.reviewedAt)}.</p></details><button class="text-btn" data-doc="${esc(priorities.researchRecord)}">Research and priority reasoning ↗</button></div></div></section>`;
 }
 function aiPriorityDetail(t) {
   const item = data.growthSystem.aiPriorities?.items.find(item => item.taskId === t.id);
@@ -738,7 +734,6 @@ function growth() {
   const g = data.growthSystem;
   if (!g) { $("#main").innerHTML = head("Growth", "Refresh to load the growth plan."); return; }
   if (growthTab === "actions") return growthActions();
-  if (growthTab === "expected") return growthExpectedResults();
   if (growthTab === "discovery") return growthDiscovery();
   if (growthTab === "tasks") return plan(true);
   if (growthTab === "rhythm") growthTab = "work";
@@ -1558,13 +1553,6 @@ async function autoSaveTask(row) {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.hasAttribute("data-expected-example")) {
-    const task = data.tasks.find(task => task.id === "GR:AI01") || data.tasks[0];
-    const result = expectedResultForTask(task, data.growthSystem, {key:"example",evidence:"Illustrative preview only. This does not complete a task or record a result.",kind:"Example only"});
-    if (result) { result.method = "Example only"; openDetail("EXAMPLE ONLY", "Expected Task Result — preview", `<p>This is a preview for “${esc(growthTaskTitle(task))}”. No task has been marked complete.</p>${expectedResultBody(result)}`); }
-    return;
-  }
-
   if (b.hasAttribute("data-support-sign-in")) {
     supportSession.error = "";
     try { await signInWithPopup(supportAuth, supportProvider); }
