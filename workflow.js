@@ -94,8 +94,13 @@ export function validateGoalFirst(system) {
       : workflow.optionalTaskIds.includes(approval.taskId);
     if (!knownTarget || !['APPROVED','REVOKED'].includes(approval.status) || !['ONE_RUN','RECURRING'].includes(approval.scope) || !approval.source?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(approval.approvedAt || '') || !Array.isArray(approval.routineIds) || approval.routineIds.some(id => !system.routines.some(r => r.id === id)) || (approval.scope === 'RECURRING' && !approval.routineIds.length)) throw new Error('Invalid explicit optional approval');
   }
+  const routineTasks = new Set();
   for (const routine of system.routines) {
     if (routine.tasks.some(id => !canSelectAutomatically(system, id, routine.id))) throw new Error('Optional task in routine without explicit recurring approval');
+    for (const id of routine.tasks) {
+      if (routineTasks.has(id)) throw new Error(`Task appears in multiple routine positions: ${id}`);
+      routineTasks.add(id);
+    }
   }
   const planIds = [...system.growthTimeline.stages.flatMap(stage => stage.taskIds), ...system.aiPriorities.items.map(item => item.taskId), system.focus.nextTask];
   if (planIds.some(id => !canSelectAutomatically(system, id))) throw new Error('Unapproved optional task in default plan');
