@@ -3347,7 +3347,7 @@ nav a.active {
 .growth-strength-layout {
   display: grid;
   grid-template-columns: minmax(420px, 1.1fr) minmax(330px, .9fr);
-  align-items: center;
+  align-items: start;
   gap: 20px;
   padding: 16px 26px 24px;
 }
@@ -3448,6 +3448,18 @@ nav a.active {
   grid-column: 1/-1;
   color: var(--muted);
   font-size: 10px;
+}
+.growth-strength-scores .growth-more {
+  grid-column: 1/-1;
+  margin: 3px 0 0;
+}
+.growth-strength-scores .growth-more > summary {
+  padding: 8px 10px;
+  font-size: 11px;
+}
+.growth-strength-scores .growth-customer-result {
+  padding-top: 5px;
+  border-top: 1px solid #e5eaf0;
 }
 .growth-strength-foot {
   padding: 18px 26px 22px;

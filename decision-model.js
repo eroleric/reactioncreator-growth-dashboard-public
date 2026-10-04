@@ -92,6 +92,47 @@ export function growthPriorityScores(system,ledger,today) {
     return {...axis,...review,state,score:evidenceLevels[state] ?? null};
   });
 }
+
+// Work and retained knowledge are distinct from the customer outcomes above.
+const priorityTaskIds = {
+  needs:['AI01','AI08','R03','F06'],
+  reach:['AI01','AI03','O02','M02','M03','M04','C01','C02','C03','C05','O04','O05','MON05','F04','E02','E03','E04','E05','E06'],
+  try:['AI03','F03','O03','O06','S01','S02','S03','S04','S05'],
+  video:['F01','F02','AI02','A01','A02','A03','A04'],
+  return:['A05','A06'],
+  paid:['MON01','MON02','MON03','MON04','AI12','R02','R05','F05'],
+};
+export function validateGrowthKnowledge(system) {
+  const rows=system.growthPriorityKnowledge;
+  if(!Array.isArray(rows) || rows.length!==growthPriorityAxes.length) throw new Error('Six retained knowledge summaries are required');
+  const seen=new Set();
+  for(const r of rows) {
+    if(!growthPriorityAxes.some(a=>a.id===r.axisId) || seen.has(r.axisId) || !textOK(r.summary) || !dateOK(r.reviewedAt) || !Array.isArray(r.sourcePaths) || !r.sourcePaths.length || r.sourcePaths.some(p=>!/^\d{2}_[A-Z_]+\/[A-Za-z0-9_-]+\.md$/.test(p))) throw new Error('Invalid retained growth knowledge');
+    seen.add(r.axisId);
+  }
+  const mapped=new Set(Object.values(priorityTaskIds).flat().map(id=>'GR:'+id));
+  if(Object.keys(system.tasks).some(id=>!mapped.has(id))) throw new Error('Growth task has no priority mapping');
+  return rows;
+}
+const workWeight=status=>({COMPLETE:1,IN_PROGRESS:.45,'IN PROGRESS':.45,BLOCKED:.15,FAILED:.1})[status] || 0;
+export function growthWorkScores(system,tasks,displayState={}) {
+  const knowledge=validateGrowthKnowledge(system), required=new Set(system.executionPolicy.goalFirst.requiredTaskIds);
+  return growthPriorityAxes.map(axis=>{
+    const taskIds=new Set(priorityTaskIds[axis.id].map(id=>'GR:'+id));
+    const records=tasks.filter(t=>taskIds.has(t.id)).map(t=>{
+      const archives=Object.values(system.removedTasks || {}).filter(a=>a.mergedInto===t.id);
+      const receipts=[...(system.runs || []).filter(r=>r.taskId===t.id),...archives.flatMap(a=>a.runs || [])];
+      const progress=Math.max(workWeight(displayState.taskOverrides?.[t.id] || t.status),...receipts.map(r=>workWeight(r.status)));
+      const sourceEvidence=String(t.evidence || '').trim();
+      const evidence=Boolean(displayState.taskNotes?.[t.id]?.trim() || (sourceEvidence && !/^(NOT STARTED|UNKNOWN|NO POST-LAUNCH|NO PAID|NO GROWTH)/i.test(sourceEvidence)) || receipts.some(r=>r.evidence?.trim() || r.output?.trim()));
+      return {id:t.id,progress,evidence,receipts:receipts.length};
+    }).filter(r=>required.has(r.id) || r.progress>0 || r.evidence);
+    const retained=knowledge.find(r=>r.axisId===axis.id), total=records.length;
+    // Optional work that has not been selected is not an unfinished-work quota.
+    const score=Number((1+(total?4*records.reduce((sum,r)=>sum+r.progress,0)/total:0)).toFixed(1));
+    return {...axis,score,knowledge:retained,total,evidence:records.filter(r=>r.evidence).length,receipts:records.reduce((sum,r)=>sum+r.receipts,0),taskIds:records.map(r=>r.id)};
+  });
+}
 export function validateDecisionView(system,ledger) {
   const v=system.decisionView;
   if (!v || !dateOK(v.reviewedAt) || !textOK(v.blocker?.title) || !textOK(v.blocker?.detail) || !v.blocker.sourcePath || !Array.isArray(v.nextActions) || !v.nextActions.length) throw new Error('Decision view needs reviewed blocker and actions');

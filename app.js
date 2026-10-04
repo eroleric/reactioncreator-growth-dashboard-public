@@ -1,6 +1,6 @@
 import { parseStrategyAnswer, encodeStrategyAnswer, parseLearningAnswer, encodeLearningAnswer } from "./strategy-answer.js?v=20260925-learning-1";
 import { mountOutreach, resetOutreach } from './outreach.js?v=20260926-2';
-import {metricState,periodLabel,milestoneState,growthPriorityScores} from './decision-model.js?v=20261003-growth-priorities';
+import {metricState,periodLabel,milestoneState,growthPriorityScores,growthWorkScores} from './decision-model.js?v=20261004-retained-knowledge';
 import {workflowMode,canSelectAutomatically} from './workflow.js?v=20261001-goal-first';
 import { completedTaskResults, expectedResultForTask, firstResultLabel, impactRangeLabel } from "./expected-results.js?v=20260924-results-1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
@@ -663,26 +663,30 @@ function growthMetricCard(key, title, explanation = "") {
   const m = metric(key), unknown = m.value === "UNKNOWN";
   return `<article class="stat"><div class="label">${esc(title)}</div><div class="number ${unknown ? "growth-unknown" : ""}">${unknown ? "Not measured yet" : display(m.value)}</div><div class="note">${esc(unknown ? explanation : m.asOf)}</div></article>`;
 }
-function growthStrengthRadar() {
-  const scores = growthPriorityScores(data.growthSystem, data.metricObservations, decisionToday()),
+function growthStrengthRadar(tasks) {
+  const outcomes = growthPriorityScores(data.growthSystem, data.metricObservations, decisionToday()),
+    scores = growthWorkScores(data.growthSystem, tasks, adminState),
     centerX = 300, centerY = 205, radius = 142,
     labels = {UNKNOWN:'Not observed yet', OUTDATED:'Needs a fresh check', REPORTED:'Customer reported', OBSERVED:'Observed', REVIEWED:'Reviewed'},
     point = (index, level, extra = 0) => {
       const angle = -Math.PI / 2 + index * Math.PI * 2 / scores.length,
-        distance = radius * level / 3 + extra;
+        distance = radius * level / 5 + extra;
       return [centerX + Math.cos(angle) * distance, centerY + Math.sin(angle) * distance];
     },
     polygon = (level) => scores.map((_, index) => point(index, level).map(n => n.toFixed(1)).join(',')).join(' '),
-    grid = [1, 2, 3].map(level => '<polygon points="'+polygon(level)+'"></polygon>').join(''),
-    axes = scores.map((_, index) => {const [x,y]=point(index,3);return '<line x1="'+centerX+'" y1="'+centerY+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'"></line>';}).join(''),
-    axisLabels = scores.map((item,index)=>{const [x,y]=point(index,3,34),anchor=x<centerX-18?'end':x>centerX+18?'start':'middle';return '<text x="'+x.toFixed(1)+'" y="'+(y+4).toFixed(1)+'" text-anchor="'+anchor+'">'+esc(item.short)+'</text>';}).join(''),
+    grid = [1, 2, 3, 4, 5].map(level => '<polygon points="'+polygon(level)+'"></polygon>').join(''),
+    axes = scores.map((_, index) => {const [x,y]=point(index,5);return '<line x1="'+centerX+'" y1="'+centerY+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'"></line>';}).join(''),
+    axisLabels = scores.map((item,index)=>{const [x,y]=point(index,5,34),anchor=x<centerX-18?'end':x>centerX+18?'start':'middle';return '<text x="'+x.toFixed(1)+'" y="'+(y+4).toFixed(1)+'" text-anchor="'+anchor+'">'+esc(item.short)+'</text>';}).join(''),
     dots = scores.map((item,index)=>{
-      const [x,y]=point(index,item.score ?? 3), unknown=item.score===null;
-      return '<circle class="'+(unknown?'growth-radar-unknown':'')+'" cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+(unknown?6:4)+'"><title>'+esc(item.title+': '+labels[item.state])+'</title></circle>';
+      const [x,y]=point(index,item.score);
+      return '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="4"><title>'+esc(item.title+': work and knowledge '+item.score+' of 5')+'</title></circle>';
     }).join(''),
-    shape = scores.every(item=>item.score!==null)?'<polygon class="growth-radar-shape" points="'+scores.map((item,index)=>point(index,item.score).map(n=>n.toFixed(1)).join(',')).join(' ')+'"></polygon>':'',
-    rows = scores.map(item=>'<div data-strength-axis="'+item.id+'" data-evidence-state="'+item.state+'"><span>'+esc(item.title)+'</span><strong>'+esc(labels[item.state])+'</strong><small>'+esc(item.summary)+'</small><small>'+esc(item.observedAt?'Observed '+item.observedAt:'Observation date unknown')+' · '+esc(item.sourcePath)+'</small></div>').join('');
-  return '<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">WORK PROGRESS</div><h2>Recorded work across Growth</h2><p>Six customer priorities: understand, reach, first try, useful video, return and payment. Customer evidence updates this web; task completion does not.</p></div><span class="tag neutral">Customer evidence</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="img" aria-label="'+esc('Six-area customer evidence chart. '+scores.map(item=>item.title+': '+labels[item.state]).join('. '))+'"><g class="growth-radar-grid">'+grid+axes+'</g>'+shape+'<g class="growth-radar-dots">'+dots+'</g><g class="growth-radar-labels">'+axisLabels+'</g></svg><p class="growth-radar-key">Rings: customer reported → observed → reviewed.<br>Hollow markers mean missing or outdated evidence; they are not scores.</p></div><div class="growth-strength-scores">'+rows+'</div></div><div class="growth-strength-foot"><p>Use the evidence to choose the next obstacle to investigate. A fuller web is not proof of growth, and the areas do not need to be equally full.</p>'+growthMore('How the chart learns','<p>Reported means a dated customer account. Observed means a verified customer result. Reviewed means actual customer behavior has been assessed for a next decision. These describe evidence depth, not conversion rates or business health. Missing and outdated evidence is left unscored; observed zero remains a measured result. Saved drafts, task notes, completion checkboxes and test activity cannot raise the web.</p><p>Customer understanding, suitable reach and first tries use reviewed, dated summaries in the Growth operating system. Useful videos, return use and paying customers use the classified metric ledger, including its observation dates and completeness. Repeat-use totals alone do not establish voluntary return; record prompting, help and whether another video was needed separately. Gifted Premium is not payment.</p><p>Content, partnerships, referrals and advertising remain tactics under the priorities they support. Measurement and learning apply across all six.</p>')+'</div></section>';
+    shape = '<polygon class="growth-radar-shape" points="'+scores.map((item,index)=>point(index,item.score).map(n=>n.toFixed(1)).join(',')).join(' ')+'"></polygon>',
+    rows = scores.map(item=>{
+      const outcome=outcomes.find(o=>o.id===item.id);
+      return '<div data-strength-axis="'+item.id+'" data-evidence-state="'+outcome.state+'"><span>'+esc(item.title)+'</span><strong>'+item.score+'<small>/5 work &amp; knowledge</small></strong><small class="growth-known"><b>Already known:</b> '+esc(item.knowledge.summary)+'</small><small>'+item.evidence+' of '+item.total+' included tasks have notes or evidence · '+item.receipts+' retained run receipts</small><small class="growth-customer-result"><b>Customer result: '+esc(labels[outcome.state])+'</b><br>'+esc(outcome.summary)+'</small>'+growthMore('Knowledge sources', '<p>Knowledge reviewed '+esc(item.knowledge.reviewedAt)+'.</p><ul>'+item.knowledge.sourcePaths.map(p=>'<li>'+esc(p)+'</li>').join('')+'</ul><p>Customer observation: '+esc(outcome.observedAt || 'unknown')+' · '+esc(outcome.sourcePath)+'. '+esc(outcome.summary)+'</p>')+'</div>';
+    }).join('');
+  return '<section class="panel growth-strength"><div class="growth-strength-head"><div><div class="eyebrow">WORK PROGRESS</div><h2>Recorded work across Growth</h2><p>Our existing knowledge, research, proof and recorded work, grouped under six customer priorities. Customer results are shown separately.</p></div><span class="tag neutral">Work &amp; knowledge · 0–5</span></div><div class="growth-strength-layout"><div class="growth-radar-wrap"><svg class="growth-radar" viewBox="0 0 600 410" role="img" aria-label="'+esc('Six-area work and knowledge chart. '+scores.map(item=>item.title+': '+item.score+' of 5').join('. '))+'"><g class="growth-radar-grid">'+grid+axes+'</g>'+shape+'<g class="growth-radar-dots">'+dots+'</g><g class="growth-radar-labels">'+axisLabels+'</g></svg><p class="growth-radar-key">The shape shows recorded work and retained knowledge.<br>It does not measure customer growth.</p></div><div class="growth-strength-scores">'+rows+'</div></div><div class="growth-strength-foot"><p>Use the evidence to choose the next obstacle to investigate. A fuller web is not proof of growth, and the areas do not need to be equally full.</p>'+growthMore('How the chart learns','<p>Each area keeps one point for its reviewed, sourced knowledge and up to four points for recorded task or run progress. Completed work counts fully; in-progress work counts partially. Earlier receipts from merged tasks count through their surviving owner, once per task. A finished cycle does not close a standing task.</p><p>Existing research, the selected creator pool, verified app proof and billing checks are retained. Optional tasks without recorded work are excluded so unused content, partnerships or advertising do not become a quota. Scores can change when the included work changes; they are not comparable customer conversion rates.</p><p>Customer results keep their separate classification and observation dates. Unknown customer outcomes do not erase preparation. A saved demo or granted Premium is not a customer activation or payment. Content, partnerships, referrals and advertising remain supporting tactics; learning applies across all six.</p>')+'</div></section>';
 }
 function growth() {
   const g = data.growthSystem;
@@ -713,7 +717,7 @@ function growth() {
     body += growthMore("Recent AI activity", receipts);
   } else if (growthTab === "strategy") {
     body = "";
-    body += growthStrengthRadar();
+    body += growthStrengthRadar(tasks);
     body += `<div class="growth-intro"><h2>How we’ll grow</h2><p>${esc(simple.planSummary)} AI adjusts the plan as results come in.</p></div>`;
     body += strategyQuestionsPanel();
     body += growthTimelinePanel();
