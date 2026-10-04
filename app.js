@@ -499,7 +499,7 @@ function sharedProjectNotepad(scope) {
 }
 function growthNavigation() {
   const selected = ["tasks", "rhythm"].includes(growthTab) ? "work" : growthTab;
-  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"]];
+  const tabs = [["roadmap","Roadmap"],["work","AI work"],["strategy","Growth plan"],["expected","Expected Results"]];
   if (creatorDiscoveryTabVisible) tabs.splice(2, 0, ["discovery", "Creator discovery"]);
   if (creatorDiscoveryTabVisible) tabs.unshift(["actions", "Admin Actions"]);
   const discoveryLabel = creatorDiscoveryTabVisible ? "Hide Admin Actions and Creator Discovery tabs" : "Show Admin Actions and Creator Discovery tabs";
@@ -513,6 +513,20 @@ function expectedResultsForTask(task) {
   const results = completedTaskResults(data, adminState).filter(result => result.taskId === task.id);
   if (!results.length) return "";
   return `<section class="task-expected-results"><h3>Expected Task Result</h3>${results.map(result => results.length > 1 ? growthMore(`Completed cycle · ${esc(result.periodKey || "Task")}`, expectedResultBody(result)) : expectedResultBody(result)).join("")}</section>`;
+}
+function growthExpectedResults() {
+  const results = completedTaskResults(data, adminState);
+  $("#main").innerHTML = head("Expected Results", "What completed work may change, when to look for an effect, and how certain the estimate is.") + growthNavigation() + `<div class="growth-workspace expected-results-workspace"><p class="expected-results-intro">Generated automatically for completed Growth tasks and completed recurring cycles. These forecasts stay separate from measured results.</p>${results.length ? `<div class="expected-results-toolbar"><p>${results.length} completed ${results.length === 1 ? "item" : "items"}</p><label>Find a completed task<input id="expected-result-search" type="search" placeholder="Search task or impact"></label><label>Confidence<select id="expected-result-confidence"><option value="ALL">All levels</option><option>Low</option><option>Medium</option><option>High</option></select></label></div><div id="expected-results-list"></div>` : `<section class="panel expected-results-empty"><h2>No completed Growth tasks yet</h2><p>When AI records a completed task or cycle, its expected outcome, timing, impact, confidence and assumptions will appear here automatically.</p><p>Day 1, 3, 7, 14 and 30 are included, with longer windows where relevant. Unknown traffic or conversion rates stay explicit.</p><button class="text-btn" data-growth-tab="work">Go to AI work →</button></section>`}</div>`;
+  if (!results.length) return;
+  const render = () => {
+    const query = $("#expected-result-search").value.trim().toLowerCase();
+    const confidence = $("#expected-result-confidence").value;
+    const matches = results.filter(result => (confidence === "ALL" || result.confidence === confidence) && `${result.taskId} ${result.taskTitle} ${result.expectedImpact.metric}`.toLowerCase().includes(query));
+    $("#expected-results-list").innerHTML = matches.length ? matches.map(result => `<details class="panel expected-result-card" data-expected-task="${esc(result.taskId)}"><summary><span><strong>${esc(result.taskTitle)}</strong><small>${esc(result.completionKind)}${result.periodKey ? ` · ${esc(result.periodKey)}` : ""} · ${esc(result.method)}</small></span><span class="expected-card-meta"><span>${esc(firstResultLabel(result.firstResult))}</span><span class="expected-confidence ${esc(result.confidence.toLowerCase())}">${esc(result.confidence)} confidence</span></span></summary>${expectedResultBody(result)}<button class="text-btn expected-open-task" data-task-detail="${esc(result.taskId)}">Open completed task →</button></details>`).join("") : '<p class="panel empty">No completed tasks match these filters.</p>';
+  };
+  $("#expected-result-search").addEventListener("input", render);
+  $("#expected-result-confidence").addEventListener("change", render);
+  render();
 }
 function completedGrowthWork(tasks, priorityCards = []) {
   const records=completedTaskResults(data,adminState), counts=new Map();
@@ -735,6 +749,7 @@ function growth() {
   const g = data.growthSystem;
   if (!g) { $("#main").innerHTML = head("Growth", "Refresh to load the growth plan."); return; }
   if (growthTab === "actions") return growthActions();
+  if (growthTab === "expected") return growthExpectedResults();
   if (growthTab === "discovery") return growthDiscovery();
   if (growthTab === "tasks") return plan(true);
   if (growthTab === "rhythm") growthTab = "work";
