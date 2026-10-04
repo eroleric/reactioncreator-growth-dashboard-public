@@ -1,4 +1,49 @@
 // Workflow inclusion is separate from authority to send, publish, change products or spend.
+const aiUseRules = ['selectionRule','simpleFirstRule','evidenceRule','measurementRule','expansionRule','recordRule','scopeRule'];
+const hasText = value => typeof value === 'string' && Boolean(value.trim());
+
+// Validate the declared working rules and task routing, not claimed usefulness or customer outcomes.
+export function validateAiUsePolicy(system) {
+  const policy = system.executionPolicy?.aiUse;
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(policy?.adoptedAt || '') &&
+    Number.isFinite(Date.parse(`${policy.adoptedAt}T00:00:00Z`)) &&
+    new Date(`${policy.adoptedAt}T00:00:00Z`).toISOString().slice(0,10) === policy.adoptedAt;
+  if (!policy || policy.version !== 1 || !validDate || !hasText(policy.sourcePath) ||
+      !/^[A-Za-z0-9_./-]+\.md$/.test(policy.sourcePath) || policy.sourcePath.startsWith('/') ||
+      policy.sourcePath.split('/').includes('..') || aiUseRules.some(key => !hasText(policy[key]))) {
+    throw new Error('AI use policy needs current rules, version, date and a retained source path');
+  }
+  if (!Array.isArray(policy.applications) || !policy.applications.length) throw new Error('AI use policy needs task applications');
+  const applicationIds = new Set(), taskIds = new Set();
+  for (const application of policy.applications) {
+    if (!application || !hasText(application.id) || applicationIds.has(application.id) ||
+        ['purpose','simpleAlternative','efficiencyMeasure','customerMeasure','expandWhen'].some(key => !hasText(application[key]))) {
+      throw new Error('AI use application needs a unique ID, purpose, alternative and separate measures');
+    }
+    if (application.efficiencyMeasure.trim() === application.customerMeasure.trim()) throw new Error('AI use efficiency and customer measures must remain separate');
+    applicationIds.add(application.id);
+    if (!Array.isArray(application.taskIds) || !application.taskIds.length) throw new Error('AI use application needs active task references');
+    for (const taskId of application.taskIds) {
+      if (!hasText(taskId) || !Object.hasOwn(system.tasks || {},taskId) || system.removedTasks?.[taskId] || taskIds.has(taskId)) {
+        throw new Error(`AI use application has an unknown, archived or duplicate task: ${taskId}`);
+      }
+      taskIds.add(taskId);
+    }
+  }
+  return system;
+}
+
+// All task/routine briefs share the rules once; selected tasks also receive their mapped purpose and measures.
+export function aiUseBrief(system, taskId = null) {
+  const policy = system.executionPolicy?.aiUse;
+  if (!Object.hasOwn(system.executionPolicy || {},'aiUse')) return ''; // Older snapshots remain readable; source validation requires the adopted policy.
+  validateAiUsePolicy(system);
+  const application = policy.applications.find(item => item.taskIds.includes(taskId));
+  const shared = `AI use: follow executionPolicy.aiUse (${policy.adoptedAt}; source ${policy.sourcePath}). ${aiUseRules.map(key => policy[key].trim()).join(' ')}`;
+  if (!application) return shared;
+  return `${shared} Selected AI application (${application.id}): Purpose: ${application.purpose.trim()} Simple alternative: ${application.simpleAlternative.trim()} Efficiency measure: ${application.efficiencyMeasure.trim()} Customer measure: ${application.customerMeasure.trim()} Repeat or expand when: ${application.expandWhen.trim()}`;
+}
+
 export function workflowMode(system, taskId) {
   const workflow = system.executionPolicy?.goalFirst;
   if (workflow?.requiredTaskIds.includes(taskId)) return 'REQUIRED';
